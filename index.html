@@ -28,9 +28,8 @@
   <div class="card">
     <div class="brand">株式会社IC SALES MAP</div>
     <h1 id="authTitle">ログイン</h1>
-    <p id="authDesc">会社共通の営業データにログインします。</p>
-    <input id="authName" class="hidden" placeholder="表示名">
-    <input id="authEmail" type="email" placeholder="メールアドレス">
+    <p id="authDesc">表示名とパスワードでログインします。</p>
+    <input id="authName" placeholder="表示名">
     <input id="authPass" type="password" placeholder="パスワード">
     <button onclick="authMain()" id="authBtn">ログイン</button>
     <div id="authMsg" class="tiny"></div>
@@ -108,7 +107,6 @@
     <div id="adminArea" class="hidden">
       <h3>社員アカウント追加</h3>
       <div class="field"><label>表示名</label><input id="newName"></div>
-      <div class="field"><label>メール</label><input id="newEmail"></div>
       <div class="field"><label>初期パスワード</label><input id="newPass" type="password"></div>
       <div class="field"><label>権限</label><select id="newRole"><option value="member">一般</option><option value="admin">管理者</option></select></div>
       <button class="save" onclick="createUser()">アカウント追加</button>
@@ -145,21 +143,21 @@ function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 function openPanel(id){$ (id).style.display='block'} function closePanel(id){$ (id).style.display='none'}
 
 async function init(){
- const {data:setup}=await sb.rpc('initial_setup_available');
- if(setup){$('authTitle').textContent='最初の管理者登録';$('authDesc').textContent='最初の1人が管理者になります。';$('authName').classList.remove('hidden');$('authBtn').textContent='管理者登録'}
- const {data:{session:s}}=await sb.auth.getSession(); if(s) await enter(s);
+ const {data:{session:s}}=await sb.auth.getSession();
+ if(s) await enter(s);
 }
 async function authMain(){
- const email=$('authEmail').value.trim(),password=$('authPass').value,name=$('authName').value.trim();
+ const displayName=$('authName').value.trim(),password=$('authPass').value;
  $('authMsg').textContent='確認中...';
  $('authBtn').disabled=true;
  try{
-   const {data:setup,error:setupError}=await sb.rpc('initial_setup_available');
-   if(setupError) throw setupError;
-   const res=setup?await sb.auth.signUp({email,password,options:{data:{display_name:name}}}):await sb.auth.signInWithPassword({email,password});
-   if(res.error){$('authMsg').textContent='ログインできません：'+res.error.message;return}
-   if(res.data.session){$('authMsg').textContent='ログイン成功。営業MAPを開いています...';await enter(res.data.session)}
-   else $('authMsg').textContent='確認メールが届いた場合は確認後ログインしてください。';
+   if(!displayName||!password){$('authMsg').textContent='表示名とパスワードを入力してください。';return}
+   const {data,error}=await sb.functions.invoke('login-by-display-name',{body:{display_name:displayName,password}});
+   if(error||data?.error){$('authMsg').textContent='ログインできません：'+(data?.error||'表示名またはパスワードを確認してください');return}
+   const setRes=await sb.auth.setSession({access_token:data.access_token,refresh_token:data.refresh_token});
+   if(setRes.error||!setRes.data.session){$('authMsg').textContent='ログイン情報の保存に失敗しました。もう一度お試しください。';return}
+   $('authMsg').textContent='ログイン成功。営業MAPを開いています...';
+   await enter(setRes.data.session);
  }catch(e){$('authMsg').textContent='通信エラー：'+(e?.message||'不明なエラー')}
  finally{$('authBtn').disabled=false}
 }
@@ -170,7 +168,7 @@ async function enter(s){
  profile=data;
  $('auth').classList.add('hidden');
  $('app').classList.remove('hidden');
- $('userMini').innerHTML=`${esc(profile.display_name||profile.email)}<br>${profile.role==='admin'?'管理者':'一般'}`;
+ $('userMini').innerHTML=`${esc(profile.display_name||'ユーザー')}<br>${profile.role==='admin'?'管理者':'一般'}`;
  buildEquip();
  setTimeout(()=>map.invalidateSize(true),40);
  await loadCompanies(true);
@@ -238,7 +236,7 @@ function scheduleMapFetch(delay=180){
   mapFetchTimer=setTimeout(()=>loadCompanies(false),delay);
 }
 function subscribe(){
-  sb.channel('sales-live-v7-2')
+  sb.channel('sales-live-v7-5')
     .on('postgres_changes',{event:'*',schema:'public',table:'sales_accounts'},payload=>{
       const row=payload.new||payload.old;
       if(!row)return;
@@ -389,19 +387,18 @@ async function geocode(a){
   }
   return null;
 }
-:null}
 async function saveCompany(){const name=$('fName').value.trim(),address=$('fAddress').value.trim();if(!name)return alert('会社名を入力してください');let lat=parseFloat($('fLat').value),lng=parseFloat($('fLng').value);if((!Number.isFinite(lat)||!Number.isFinite(lng))&&address){const p=await geocode(address);if(!p){return openManualLocationPicker(address)}lat=p.lat;lng=p.lng}const p={category:$('fCategory').value,name,address,lat,lng,industry:$('fIndustry').value.trim(),president_name:$('fPresident').value.trim(),president_mobile:$('fPresidentMobile').value.trim(),phone:$('fPhone').value.trim(),website_url:$('fWebsite').value.trim(),staff:$('fStaff').value.trim(),status:$('fStatus').value,last_visit_date:$('fDate').value||null,sales_note:$('fNeta').value.trim(),next_action:$('fNext').value.trim(),updated_by:session.user.id};Object.keys(EQUIP).forEach(k=>p[k]=readEq(k));const id=$('editId').value;let res;if(id)res=await sb.from('sales_accounts').update(p).eq('id',id);else{p.created_by=session.user.id;res=await sb.from('sales_accounts').insert(p)}if(res.error)return alert(res.error.message);activeCategory=p.category;closePanel('formPanel');await setCategory(activeCategory)}
 async function deleteCurrent(){const id=$('editId').value;if(id&&confirm('削除しますか？'))await sb.from('sales_accounts').delete().eq('id',id);closePanel('formPanel');await loadCompanies(true)}
 
 async function useCurrentLocationForForm(){navigator.geolocation.getCurrentPosition(p=>{$('fLat').value=p.coords.latitude.toFixed(6);$('fLng').value=p.coords.longitude.toFixed(6);alert('現在地を設定しました')},()=>alert('現在地を取得できません'),{enableHighAccuracy:true,timeout:15000,maximumAge:0})}
 async function locateMe(){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>alert('現在地を取得できません'),{enableHighAccuracy:true,timeout:15000,maximumAge:0})}
-function openManage(){$('manageList').innerHTML=rows().map(c=>`<label class="manage-row"><input type="checkbox" class="del" value="${c.id}"><div><b>${esc(c.name)}</b><div class="tiny">${esc(c.address||'')}</div></div></label>`).join('');openPanel('managePanel')}
+function openManage(){$('manageList').innerHTML=companies.map(c=>`<label class="manage-row"><input type="checkbox" class="del" value="${c.id}"><div><b>${esc(c.name)}</b><div class="tiny">${esc(c.address||'')}</div></div></label>`).join('');openPanel('managePanel')}
 async function deleteSelected(){const ids=[...document.querySelectorAll('.del:checked')].map(x=>x.value);if(!ids.length)return alert('選択してください');if(confirm(`${ids.length}件削除しますか？`)){await sb.from('sales_accounts').delete().in('id',ids);await loadCompanies(true);openManage()}}
 async function deleteAll(){if(profile.role!=='admin')return alert('管理者のみ');if(confirm('全データ削除しますか？')&&confirm('最終確認です')){await sb.from('sales_accounts').delete().gte('id',0);await loadCompanies(true);closePanel('managePanel')}}
 
-async function openAccount(){$('accountMe').innerHTML=`<b>${esc(profile.display_name||'')}</b><br><span class="tiny">${esc(profile.email||'')} / ${profile.role==='admin'?'管理者':'一般'}</span>`;$('adminArea').classList.toggle('hidden',profile.role!=='admin');if(profile.role==='admin')await loadProfiles();openPanel('accountPanel')}
-async function loadProfiles(){const {data}=await sb.from('profiles').select('*').order('created_at');$('profilesList').innerHTML=(data||[]).map(p=>`<div class="account-row"><b>${esc(p.display_name||'-')}</b><br><span class="tiny">${esc(p.email||'')} / ${p.role==='admin'?'管理者':'一般'}</span></div>`).join('')}
-async function createUser(){const body={display_name:$('newName').value.trim(),email:$('newEmail').value.trim(),password:$('newPass').value,role:$('newRole').value};if(!body.email||body.password.length<8)return alert('メールと8文字以上のパスワードが必要です');const {data,error}=await sb.functions.invoke('create-ic-user',{body});if(error||data?.error)return alert(data?.error||error.message);alert('追加しました');await loadProfiles()}
+async function openAccount(){$('accountMe').innerHTML=`<b>${esc(profile.display_name||'')}</b><br><span class="tiny">${profile.role==='admin'?'管理者':'一般'}</span>`;$('adminArea').classList.toggle('hidden',profile.role!=='admin');if(profile.role==='admin')await loadProfiles();openPanel('accountPanel')}
+async function loadProfiles(){const {data}=await sb.from('profiles').select('id,display_name,role,created_at').order('created_at');$('profilesList').innerHTML=(data||[]).map(p=>`<div class="account-row"><b>${esc(p.display_name||'-')}</b><br><span class="tiny">${p.role==='admin'?'管理者':'一般'}</span></div>`).join('')}
+async function createUser(){const body={display_name:$('newName').value.trim(),password:$('newPass').value,role:$('newRole').value};if(!body.display_name||body.password.length<8)return alert('表示名と8文字以上のパスワードが必要です');const {data,error}=await sb.functions.invoke('create-ic-user',{body});if(error||data?.error)return alert(data?.error||error.message);$('newName').value='';$('newPass').value='';alert('追加しました');await loadProfiles()}
 
 function toExcel(c){const r={会社名:c.name,住所:c.address,業種:c.industry,社長名:c.president_name,社長携帯:c.president_mobile,会社電話:c.phone,公式ホームページ:c.website_url,担当者:c.staff,ステータス:c.status,最終訪問日:c.last_visit_date||'',営業ネタ:c.sales_note,次回アクション:c.next_action,緯度:c.lat,経度:c.lng};Object.entries(EQUIP).forEach(([k,v])=>{const e=c[k]||{},p=v.label;if(v.presence)r[p+'有無']=e.presence||'';r[p+'メーカー']=e.manufacturer==='その他'?(e.custom_manufacturer||'その他'):(e.manufacturer||'');r[p+'型式']=e.model||'';r[p+'販売店']=e.vendor||'';r[p+'契約']=e.acquisition||'';r[p+'リース開始']=e.lease_start||'';r[p+'契約年数']=e.contract_years||''});return r}
 async function exportExcel(){
@@ -492,6 +489,49 @@ function openWebsiteForCompany(id){
     window.open('https://www.google.com/search?q='+encodeURIComponent(q),'_blank');
   }
 }
+
+
+function excelValue(row,...keys){for(const k of keys){if(row[k]!==undefined&&row[k]!==null&&String(row[k]).trim()!=='')return String(row[k]).trim()}return ''}
+function excelEquipment(row,label,presence){
+  const man=excelValue(row,label+'メーカー');
+  const known=(Object.values(EQUIP).find(v=>v.label===label)?.manufacturers||[]);
+  return {
+    presence:presence?excelValue(row,label+'有無')||'有り':'',
+    manufacturer:man?(known.includes(man)?man:'その他'):'',
+    custom_manufacturer:man&&!known.includes(man)?man:'',
+    model:excelValue(row,label+'型式'),vendor:excelValue(row,label+'販売店'),
+    acquisition:excelValue(row,label+'契約'),lease_start:excelValue(row,label+'リース開始'),contract_years:excelValue(row,label+'契約年数')
+  };
+}
+async function importExcelFile(file){
+  if(!file)return;
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const cats=['飛び込みリスト','見込','顧客'];
+    let rows=[];
+    cats.forEach(cat=>{const ws=wb.Sheets[cat];if(!ws)return;XLSX.utils.sheet_to_json(ws,{defval:''}).forEach(r=>rows.push({cat,row:r}))});
+    if(!rows.length){alert('「飛び込みリスト」「見込」「顧客」のシートが見つかりません');return}
+    if(!confirm(`${rows.length}件を共有DBへ読み込みますか？`))return;
+    let ok=0,ng=0;
+    for(let i=0;i<rows.length;i++){
+      const {cat,row}=rows[i],name=excelValue(row,'会社名'),address=excelValue(row,'住所');
+      if(!name){ng++;continue}
+      $('authMsg').textContent=`Excel読込中 ${i+1}/${rows.length}`;
+      let lat=parseFloat(row['緯度']),lng=parseFloat(row['経度']);
+      if((!Number.isFinite(lat)||!Number.isFinite(lng))&&address){const g=await geocode(address);if(g){lat=g.lat;lng=g.lng}}
+      const p={category:cat,name,address,lat:Number.isFinite(lat)?lat:null,lng:Number.isFinite(lng)?lng:null,industry:excelValue(row,'業種'),president_name:excelValue(row,'社長名'),president_mobile:excelValue(row,'社長携帯'),phone:excelValue(row,'会社電話'),website_url:excelValue(row,'公式ホームページ'),staff:excelValue(row,'担当者'),status:excelValue(row,'ステータス')||'未訪問',last_visit_date:excelValue(row,'最終訪問日')||null,sales_note:excelValue(row,'営業ネタ'),next_action:excelValue(row,'次回アクション'),created_by:session.user.id,updated_by:session.user.id};
+      Object.entries(EQUIP).forEach(([k,v])=>p[k]=excelEquipment(row,v.label,v.presence));
+      const {error}=await sb.from('sales_accounts').insert(p);if(error)ng++;else ok++;
+      if(i<rows.length-1)await new Promise(r=>setTimeout(r,120));
+    }
+    $('authMsg').textContent='';
+    $('excelFile').value='';
+    await loadCompanies(true);
+    alert(`Excel読込完了：${ok}件 / 失敗・スキップ ${ng}件`);
+  }catch(e){alert('Excel読込エラー：'+(e?.message||'不明なエラー'))}
+}
+$('excelFile').addEventListener('change',e=>importExcelFile(e.target.files?.[0]));
 
 init();
 </script>
