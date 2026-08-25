@@ -38,7 +38,7 @@
 </div>
 
 <div id="app" class="hidden">
-  <div id="map"></div>
+  <div id="map"></div><div id="mapBusy" style="display:none;position:absolute;z-index:1100;left:50%;top:215px;transform:translateX(-50%);background:rgba(11,16,23,.92);color:#fff;border:1px solid #263243;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:800">地図更新中...</div>
   <div class="top">
     <div class="brand">株式会社IC SALES MAP</div>
     <div class="count"><span id="count">0</span><span style="font-size:22px"> 社</span></div>
@@ -129,7 +129,7 @@ const EQUIP={
 };
 let activeCategory='飛び込みリスト',companies=[],markers=[],session=null,profile=null;
 let filters={type:'all',manufacturer:'',vendor:'',presence:'',acquisition:''};
-const map=L.map('map',{zoomControl:false}).setView([34.5,135.5],6);
+const canvasRenderer=L.canvas({padding:0.5});const map=L.map('map',{zoomControl:false,preferCanvas:true,renderer:canvasRenderer}).setView([34.5,135.5],6);
 L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',{maxZoom:18,attribution:'地理院タイル'}).addTo(map);
 
 const $=id=>document.getElementById(id);
@@ -150,51 +150,144 @@ async function authMain(){
 }
 async function enter(s){
  session=s; const {data,error}=await sb.from('profiles').select('*').eq('id',s.user.id).single(); if(error)return;
- profile=data;$('auth').classList.add('hidden');$('app').classList.remove('hidden');$('userMini').innerHTML=`${esc(profile.display_name||profile.email)}<br>${profile.role==='admin'?'管理者':'一般'}`;buildEquip();await loadCompanies();subscribe();
+ profile=data;$('auth').classList.add('hidden');$('app').classList.remove('hidden');$('userMini').innerHTML=`${esc(profile.display_name||profile.email)}<br>${profile.role==='admin'?'管理者':'一般'}`;buildEquip();setTimeout(()=>map.invalidateSize(true),40);await loadCompanies(true);subscribe();setTimeout(()=>map.invalidateSize(true),220);
 }
 async function logout(){await sb.auth.signOut();location.reload()}
-async function loadCompanies(){const {data}=await sb.from('sales_accounts').select('*').order('updated_at',{ascending:false});companies=data||[];render()}
-function subscribe(){sb.channel('sales-live').on('postgres_changes',{event:'*',schema:'public',table:'sales_accounts'},loadCompanies).subscribe()}
 
-function setCategory(c){activeCategory=c;['t1','t2','t3'].forEach(x=>$(x).classList.remove('active'));$(c==='飛び込みリスト'?'t1':c==='見込'?'t2':'t3').classList.add('active');render()}
-function eqText(eq){return [eq?.presence,eq?.manufacturer,eq?.custom_manufacturer,eq?.model,eq?.vendor,eq?.acquisition,eq?.lease_start,eq?.contract_years].join(' ').toLowerCase()}
-function matchFilter(c){
- if(!filters.manufacturer&&!filters.vendor&&!filters.presence&&!filters.acquisition)return true;
- const keys=filters.type==='all'?Object.keys(EQUIP):[filters.type];
- return keys.some(k=>{const e=c[k]||{};const m=(e.manufacturer==='その他'?e.custom_manufacturer:e.manufacturer)||'';return (!filters.manufacturer||m.toLowerCase().includes(filters.manufacturer.toLowerCase()))&&(!filters.vendor||String(e.vendor||'').toLowerCase().includes(filters.vendor.toLowerCase()))&&(!filters.presence||e.presence===filters.presence)&&(!filters.acquisition||e.acquisition===filters.acquisition)})
+let fetchSeq=0;
+let mapFetchTimer=null;
+let searchTimer=null;
+let lastFetchKey='';
+let realtimeTimer=null;
+
+function currentBoundsForQuery(){
+  const b=map.getBounds();
+  const pad=0.12;
+  const latSpan=Math.max(0.02,b.getNorth()-b.getSouth());
+  const lngSpan=Math.max(0.02,b.getEast()-b.getWest());
+  return {
+    minLat:b.getSouth()-latSpan*pad,
+    maxLat:b.getNorth()+latSpan*pad,
+    minLng:b.getWest()-lngSpan*pad,
+    maxLng:b.getEast()+lngSpan*pad
+  };
 }
-function rows(){
- const q=$('searchInput').value.trim().toLowerCase();
- return companies.filter(c=>c.category===activeCategory).filter(c=>{const t=[c.name,c.address,c.president_name,c.president_mobile,c.industry,c.staff,c.sales_note,c.next_action,...Object.keys(EQUIP).map(k=>eqText(c[k]))].join(' ').toLowerCase();return(!q||t.includes(q))&&matchFilter(c)})
+function queryLimitForZoom(){
+  const z=map.getZoom();
+  if(z<=7)return 1200;
+  if(z<=10)return 1800;
+  if(z<=13)return 2500;
+  return 3500;
+}
+function activeSearchText(){
+  return $('searchInput').value.trim();
+}
+async function loadCompanies(force=false){
+  if(!session)return;
+  const b=currentBoundsForQuery();
+  const params={
+    p_category:activeCategory,
+    p_min_lat:b.minLat,p_max_lat:b.maxLat,p_min_lng:b.minLng,p_max_lng:b.maxLng,
+    p_query:activeSearchText(),
+    p_equipment_type:filters.type||'all',
+    p_manufacturer:filters.manufacturer||'',
+    p_vendor:filters.vendor||'',
+    p_presence:filters.presence||'',
+    p_acquisition:filters.acquisition||'',
+    p_limit:queryLimitForZoom()
+  };
+  const key=JSON.stringify(params);
+  if(!force&&key===lastFetchKey)return;
+  lastFetchKey=key;
+  const seq=++fetchSeq;
+  const busy=$('mapBusy'); if(busy)busy.style.display='block';
+  const {data,error}=await sb.rpc('get_sales_map_rows',params);
+  if(seq!==fetchSeq)return;
+  if(busy)busy.style.display='none';
+  if(error){console.error(error);return}
+  companies=data||[];
+  render();
+}
+function scheduleMapFetch(delay=180){
+  clearTimeout(mapFetchTimer);
+  mapFetchTimer=setTimeout(()=>loadCompanies(false),delay);
+}
+function subscribe(){
+  sb.channel('sales-live-v7')
+    .on('postgres_changes',{event:'*',schema:'public',table:'sales_accounts'},payload=>{
+      const row=payload.new||payload.old;
+      if(!row)return;
+      if(row.category!==activeCategory && payload.eventType!=='DELETE')return;
+      clearTimeout(realtimeTimer);
+      realtimeTimer=setTimeout(()=>loadCompanies(true),220);
+    })
+    .subscribe();
+}
+async function setCategory(c){
+  activeCategory=c;
+  ['t1','t2','t3'].forEach(x=>$(x).classList.remove('active'));
+  $(c==='飛び込みリスト'?'t1':c==='見込'?'t2':'t3').classList.add('active');
+  lastFetchKey='';
+  companies=[];
+  render();
+  await loadCompanies(true);
 }
 function color(s){return s==='訪問済'?'#43d18f':(s==='アポ'||s==='商談')?'#5ba7ff':s==='契約'?'#a97cff':s==='NG'?'#ff6969':'#f1c340'}
-function render(){markers.forEach(m=>map.removeLayer(m));markers=[];const r=rows();r.forEach(c=>{if(!Number.isFinite(+c.lat)||!Number.isFinite(+c.lng))return;const co=color(c.status),ic=L.divIcon({className:'',html:`<div style="width:15px;height:15px;border-radius:50%;background:${co}"></div>`,iconSize:[15,15]}),m=L.marker([+c.lat,+c.lng],{icon:ic}).addTo(map);m.bindPopup(`<div class="popup"><h3>${esc(c.name)}</h3><div class="meta">${esc(c.address||'')}</div><div class="meta">社長:${esc(c.president_name||'-')} / ${esc(c.president_mobile||'-')}</div><div class="memo">${Object.entries(EQUIP).map(([k,v])=>{const e=c[k]||{},man=e.manufacturer==='その他'?e.custom_manufacturer:e.manufacturer;return (man||e.vendor||e.presence==='無し')?`${v.label}：${e.presence==='無し'?'無し':(man||'-')+' / '+(e.vendor||'-')}`:''}).filter(Boolean).join('<br>')}</div><button onclick="editCompany('${c.id}')" style="width:100%;margin-top:8px;padding:8px">編集</button></div>`);markers.push(m)});$('count').textContent=r.length}
+function render(){
+  markers.forEach(m=>map.removeLayer(m));markers=[];
+  const r=companies;
+  const z=map.getZoom();
+  const radius=z>=15?7:z>=12?6:z>=9?5:4;
+  r.forEach(c=>{
+    if(!Number.isFinite(+c.lat)||!Number.isFinite(+c.lng))return;
+    const co=color(c.status);
+    const m=L.circleMarker([+c.lat,+c.lng],{
+      renderer:canvasRenderer,radius,weight:1.5,color:'#fff',fillColor:co,fillOpacity:1
+    }).addTo(map);
+    m.bindPopup(`<div class="popup"><h3>${esc(c.name)}</h3><div class="meta">${esc(c.address||'')}</div><div class="meta">社長:${esc(c.president_name||'-')} / ${esc(c.president_mobile||'-')}</div><div class="memo">${Object.entries(EQUIP).map(([k,v])=>{const e=c[k]||{},man=e.manufacturer==='その他'?e.custom_manufacturer:e.manufacturer;return (man||e.vendor||e.presence==='無し')?`${v.label}：${e.presence==='無し'?'無し':(man||'-')+' / '+(e.vendor||'-')}`:''}).filter(Boolean).join('<br>')}</div><button onclick="editCompany('${c.id}')" style="width:100%;margin-top:8px;padding:8px">編集</button></div>`);
+    markers.push(m);
+  });
+  $('count').textContent=r.length;
+}
 function fitAll(){if(markers.length)map.fitBounds(L.featureGroup(markers).getBounds().pad(.18))}
-function toggleSearch(){$('searchBox').style.display=$('searchBox').style.display==='block'?'none':'block'} $('searchInput').addEventListener('input',render);
-function applyFilters(){filters={type:$('filterType').value,manufacturer:$('filterManufacturer').value.trim(),vendor:$('filterVendor').value.trim(),presence:$('filterPresence').value,acquisition:$('filterAcquisition').value};render();closePanel('filterPanel');fitAll()}
-function clearFilters(){filters={type:'all',manufacturer:'',vendor:'',presence:'',acquisition:''};$('filterType').value='all';$('filterManufacturer').value='';$('filterVendor').value='';$('filterPresence').value='';$('filterAcquisition').value='';render();closePanel('filterPanel')}
+map.on('moveend zoomend',()=>scheduleMapFetch(180));
+window.addEventListener('resize',()=>setTimeout(()=>{map.invalidateSize(false);scheduleMapFetch(120)},120));
+window.addEventListener('orientationchange',()=>setTimeout(()=>{map.invalidateSize(true);scheduleMapFetch(120)},320));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(()=>{map.invalidateSize(true);loadCompanies(true)},150)});
+function toggleSearch(){$('searchBox').style.display=$('searchBox').style.display==='block'?'none':'block'} let searchTimer=null;$('searchInput').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{lastFetchKey='';loadCompanies(true)},250)});searchTimer=setTimeout(render,180)});
+function applyFilters(){filters={type:$('filterType').value,manufacturer:$('filterManufacturer').value.trim(),vendor:$('filterVendor').value.trim(),presence:$('filterPresence').value,acquisition:$('filterAcquisition').value};lastFetchKey='';closePanel('filterPanel');loadCompanies(true)};render();closePanel('filterPanel');fitAll()}
+function clearFilters(){filters={type:'all',manufacturer:'',vendor:'',presence:'',acquisition:''};$('filterType').value='all';$('filterManufacturer').value='';$('filterVendor').value='';$('filterPresence').value='';$('filterAcquisition').value='';lastFetchKey='';closePanel('filterPanel');loadCompanies(true)};$('filterType').value='all';$('filterManufacturer').value='';$('filterVendor').value='';$('filterPresence').value='';$('filterAcquisition').value='';render();closePanel('filterPanel')}
 
 function buildEquip(){const root=$('equipRoot');root.innerHTML='';Object.entries(EQUIP).forEach(([k,c])=>root.insertAdjacentHTML('beforeend',`<div class="section"><b>${c.label}</b>${c.presence?`<div class="field"><label>有無</label><select id="${k}_presence"><option>有り</option><option>無し</option></select></div>`:''}<div class="grid"><div class="field"><label>メーカー</label><select id="${k}_manufacturer"><option></option>${c.manufacturers.map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field"><label>型式</label><input id="${k}_model"></div></div><div class="field"><label>その他メーカー名</label><input id="${k}_custom"></div><div class="field"><label>販売店</label><input id="${k}_vendor"></div><div class="grid"><div class="field"><label>リース/買取</label><select id="${k}_acq"><option></option><option>リース</option><option>買取</option></select></div><div class="field"><label>リース開始年月</label><input id="${k}_lease" type="month"></div></div><div class="field"><label>契約年数</label><input id="${k}_years"></div></div>`))}
 function readEq(k){return{presence:EQUIP[k].presence?$(k+'_presence').value:'',manufacturer:$(k+'_manufacturer').value,custom_manufacturer:$(k+'_custom').value.trim(),model:$(k+'_model').value.trim(),vendor:$(k+'_vendor').value.trim(),acquisition:$(k+'_acq').value,lease_start:$(k+'_lease').value,contract_years:$(k+'_years').value.trim()}}
 function fillEq(k,e={}){if(EQUIP[k].presence)$(k+'_presence').value=e.presence||'有り';$(k+'_manufacturer').value=e.manufacturer||'';$(k+'_custom').value=e.custom_manufacturer||'';$(k+'_model').value=e.model||'';$(k+'_vendor').value=e.vendor||'';$(k+'_acq').value=e.acquisition||'';$(k+'_lease').value=e.lease_start||'';$(k+'_years').value=e.contract_years||''}
 function resetForm(){['editId','fName','fIndustry','fAddress','fPresident','fPresidentMobile','fPhone','fStaff','fDate','fNeta','fNext','fLat','fLng'].forEach(i=>$(i).value='');$('fCategory').value=activeCategory;$('fStatus').value='未訪問';Object.keys(EQUIP).forEach(k=>fillEq(k,{}))}
 function openForm(){resetForm();$('deleteBtn').classList.add('hidden');openPanel('formPanel')}
-function editCompany(id){const c=companies.find(x=>String(x.id)===String(id));if(!c)return;$('editId').value=c.id;$('fCategory').value=c.category;$('fName').value=c.name||'';$('fIndustry').value=c.industry||'';$('fAddress').value=c.address||'';$('fPresident').value=c.president_name||'';$('fPresidentMobile').value=c.president_mobile||'';$('fPhone').value=c.phone||'';$('fStaff').value=c.staff||'';$('fStatus').value=c.status||'未訪問';$('fDate').value=c.last_visit_date||'';$('fNeta').value=c.sales_note||'';$('fNext').value=c.next_action||'';$('fLat').value=c.lat??'';$('fLng').value=c.lng??'';Object.keys(EQUIP).forEach(k=>fillEq(k,c[k]||{}));$('deleteBtn').classList.remove('hidden');openPanel('formPanel')} window.editCompany=editCompany;
+async function editCompany(id){let c=companies.find(x=>String(x.id)===String(id));if(!c){const {data}=await sb.from('sales_accounts').select('*').eq('id',id).single();c=data}if(!c)return;$('editId').value=c.id;$('fCategory').value=c.category;$('fName').value=c.name||'';$('fIndustry').value=c.industry||'';$('fAddress').value=c.address||'';$('fPresident').value=c.president_name||'';$('fPresidentMobile').value=c.president_mobile||'';$('fPhone').value=c.phone||'';$('fStaff').value=c.staff||'';$('fStatus').value=c.status||'未訪問';$('fDate').value=c.last_visit_date||'';$('fNeta').value=c.sales_note||'';$('fNext').value=c.next_action||'';$('fLat').value=c.lat??'';$('fLng').value=c.lng??'';Object.keys(EQUIP).forEach(k=>fillEq(k,c[k]||{}));$('deleteBtn').classList.remove('hidden');openPanel('formPanel')} window.editCompany=editCompany;
 async function geocode(a){const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q='+encodeURIComponent(a));const d=await r.json();return d?.[0]?{lat:+d[0].lat,lng:+d[0].lon}:null}
-async function saveCompany(){const name=$('fName').value.trim(),address=$('fAddress').value.trim();if(!name)return alert('会社名を入力してください');let lat=parseFloat($('fLat').value),lng=parseFloat($('fLng').value);if((!Number.isFinite(lat)||!Number.isFinite(lng))&&address){const p=await geocode(address);if(!p)return alert('住所から位置を取得できません');lat=p.lat;lng=p.lng}const p={category:$('fCategory').value,name,address,lat,lng,industry:$('fIndustry').value.trim(),president_name:$('fPresident').value.trim(),president_mobile:$('fPresidentMobile').value.trim(),phone:$('fPhone').value.trim(),staff:$('fStaff').value.trim(),status:$('fStatus').value,last_visit_date:$('fDate').value||null,sales_note:$('fNeta').value.trim(),next_action:$('fNext').value.trim(),updated_by:session.user.id};Object.keys(EQUIP).forEach(k=>p[k]=readEq(k));const id=$('editId').value;let res;if(id)res=await sb.from('sales_accounts').update(p).eq('id',id);else{p.created_by=session.user.id;res=await sb.from('sales_accounts').insert(p)}if(res.error)return alert(res.error.message);activeCategory=p.category;setCategory(activeCategory);closePanel('formPanel')}
-async function deleteCurrent(){const id=$('editId').value;if(id&&confirm('削除しますか？'))await sb.from('sales_accounts').delete().eq('id',id);closePanel('formPanel')}
+async function saveCompany(){const name=$('fName').value.trim(),address=$('fAddress').value.trim();if(!name)return alert('会社名を入力してください');let lat=parseFloat($('fLat').value),lng=parseFloat($('fLng').value);if((!Number.isFinite(lat)||!Number.isFinite(lng))&&address){const p=await geocode(address);if(!p)return alert('住所から位置を取得できません');lat=p.lat;lng=p.lng}const p={category:$('fCategory').value,name,address,lat,lng,industry:$('fIndustry').value.trim(),president_name:$('fPresident').value.trim(),president_mobile:$('fPresidentMobile').value.trim(),phone:$('fPhone').value.trim(),staff:$('fStaff').value.trim(),status:$('fStatus').value,last_visit_date:$('fDate').value||null,sales_note:$('fNeta').value.trim(),next_action:$('fNext').value.trim(),updated_by:session.user.id};Object.keys(EQUIP).forEach(k=>p[k]=readEq(k));const id=$('editId').value;let res;if(id)res=await sb.from('sales_accounts').update(p).eq('id',id);else{p.created_by=session.user.id;res=await sb.from('sales_accounts').insert(p)}if(res.error)return alert(res.error.message);activeCategory=p.category;closePanel('formPanel');await setCategory(activeCategory)}
+async function deleteCurrent(){const id=$('editId').value;if(id&&confirm('削除しますか？'))await sb.from('sales_accounts').delete().eq('id',id);closePanel('formPanel');await loadCompanies(true)}
 
 async function locateMe(){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>alert('現在地を取得できません'),{enableHighAccuracy:true,timeout:15000,maximumAge:0})}
 function openManage(){$('manageList').innerHTML=rows().map(c=>`<label class="manage-row"><input type="checkbox" class="del" value="${c.id}"><div><b>${esc(c.name)}</b><div class="tiny">${esc(c.address||'')}</div></div></label>`).join('');openPanel('managePanel')}
-async function deleteSelected(){const ids=[...document.querySelectorAll('.del:checked')].map(x=>x.value);if(!ids.length)return alert('選択してください');if(confirm(`${ids.length}件削除しますか？`))await sb.from('sales_accounts').delete().in('id',ids)}
-async function deleteAll(){if(profile.role!=='admin')return alert('管理者のみ');if(confirm('全データ削除しますか？')&&confirm('最終確認です'))await sb.from('sales_accounts').delete().gte('id',0)}
+async function deleteSelected(){const ids=[...document.querySelectorAll('.del:checked')].map(x=>x.value);if(!ids.length)return alert('選択してください');if(confirm(`${ids.length}件削除しますか？`)){await sb.from('sales_accounts').delete().in('id',ids);await loadCompanies(true);openManage()}}
+async function deleteAll(){if(profile.role!=='admin')return alert('管理者のみ');if(confirm('全データ削除しますか？')&&confirm('最終確認です')){await sb.from('sales_accounts').delete().gte('id',0);await loadCompanies(true);closePanel('managePanel')}}
 
 async function openAccount(){$('accountMe').innerHTML=`<b>${esc(profile.display_name||'')}</b><br><span class="tiny">${esc(profile.email||'')} / ${profile.role==='admin'?'管理者':'一般'}</span>`;$('adminArea').classList.toggle('hidden',profile.role!=='admin');if(profile.role==='admin')await loadProfiles();openPanel('accountPanel')}
 async function loadProfiles(){const {data}=await sb.from('profiles').select('*').order('created_at');$('profilesList').innerHTML=(data||[]).map(p=>`<div class="account-row"><b>${esc(p.display_name||'-')}</b><br><span class="tiny">${esc(p.email||'')} / ${p.role==='admin'?'管理者':'一般'}</span></div>`).join('')}
 async function createUser(){const body={display_name:$('newName').value.trim(),email:$('newEmail').value.trim(),password:$('newPass').value,role:$('newRole').value};if(!body.email||body.password.length<8)return alert('メールと8文字以上のパスワードが必要です');const {data,error}=await sb.functions.invoke('create-ic-user',{body});if(error||data?.error)return alert(data?.error||error.message);alert('追加しました');await loadProfiles()}
 
 function toExcel(c){const r={会社名:c.name,住所:c.address,業種:c.industry,社長名:c.president_name,社長携帯:c.president_mobile,会社電話:c.phone,担当者:c.staff,ステータス:c.status,最終訪問日:c.last_visit_date||'',営業ネタ:c.sales_note,次回アクション:c.next_action,緯度:c.lat,経度:c.lng};Object.entries(EQUIP).forEach(([k,v])=>{const e=c[k]||{},p=v.label;if(v.presence)r[p+'有無']=e.presence||'';r[p+'メーカー']=e.manufacturer==='その他'?(e.custom_manufacturer||'その他'):(e.manufacturer||'');r[p+'型式']=e.model||'';r[p+'販売店']=e.vendor||'';r[p+'契約']=e.acquisition||'';r[p+'リース開始']=e.lease_start||'';r[p+'契約年数']=e.contract_years||''});return r}
-function exportExcel(){const wb=XLSX.utils.book_new();['飛び込みリスト','見込','顧客'].forEach(cat=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(companies.filter(c=>c.category===cat).map(toExcel))||[{}]),cat);XLSX.writeFile(wb,'株式会社IC_共有営業管理.xlsx')}
+async function exportExcel(){
+  const {data,error}=await sb.from('sales_accounts').select('*').order('category').order('updated_at',{ascending:false});
+  if(error)return alert('Excel出力エラー：'+error.message);
+  const all=data||[],wb=XLSX.utils.book_new();
+  ['飛び込みリスト','見込','顧客'].forEach(cat=>{
+    const rr=all.filter(c=>c.category===cat).map(toExcel);
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rr.length?rr:[{'会社名':'','住所':''}]),cat);
+  });
+  XLSX.writeFile(wb,'株式会社IC_共有営業管理.xlsx');
+}
 function downloadTemplate(){const wb=XLSX.utils.book_new();['飛び込みリスト','見込','顧客'].forEach(cat=>{const r={会社名:'',住所:'',業種:'',社長名:'',社長携帯:'',会社電話:'',担当者:'',ステータス:'未訪問',最終訪問日:'',営業ネタ:'',次回アクション:''};Object.values(EQUIP).forEach(v=>{if(v.presence)r[v.label+'有無']='';r[v.label+'メーカー']='';r[v.label+'型式']='';r[v.label+'販売店']='';r[v.label+'契約']='';r[v.label+'リース開始']='';r[v.label+'契約年数']=''});XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([r]),cat)});XLSX.writeFile(wb,'株式会社IC_共有営業管理_ひな形.xlsx')}
 
 init();
