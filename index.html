@@ -1,122 +1,119 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b1017" />
-  <title>株式会社IC 営業MAP</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b1017" />
+<title>株式会社IC 営業MAP</title>
 
-  <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-  <style>
-    :root{
-      --bg:#0b1017;
-      --panel:#111925;
-      --line:#263243;
-      --text:#f7f9fc;
-      --muted:#96a2b3;
-      --gold:#f1c340;
-      --green:#43d18f;
-      --blue:#5ba7ff;
-      --purple:#a97cff;
-      --red:#ff6969;
-    }
-    *{box-sizing:border-box}
-    html,body,#app,#map{height:100%;margin:0}
-    html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-    body{overflow:hidden}
-    button,input,select,textarea{font:inherit}
-    #app{position:relative}
-    #map{width:100%;background:#111}
+<style>
+:root{
+  --bg:#0b1017;--panel:#111925;--line:#263243;--text:#f7f9fc;--muted:#96a2b3;
+  --gold:#f1c340;--green:#43d18f;--blue:#5ba7ff;--purple:#a97cff;--red:#ff6969;
+}
+*{box-sizing:border-box}
+html,body,#app,#map{height:100%;margin:0}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{overflow:hidden}
+button,input,select,textarea{font:inherit}
+#app{position:relative}
+#map{width:100%;background:#111}
 
-    .top{
-      position:absolute;z-index:1000;top:0;left:0;right:0;
-      padding:calc(env(safe-area-inset-top) + 14px) 18px 32px;
-      pointer-events:none;
-      background:linear-gradient(180deg,rgba(11,16,23,.98),rgba(11,16,23,.82) 64%,rgba(11,16,23,0));
-    }
-    .brand{font-size:14px;font-weight:800;letter-spacing:.17em;color:var(--gold)}
-    .countline{display:flex;align-items:flex-end;gap:10px;margin-top:6px}
-    .count{font-size:68px;line-height:.92;font-weight:850}
-    .unit{font-size:23px;font-weight:800;padding-bottom:8px}
-    .subtitle{margin-top:14px;color:var(--muted);font-size:15px}
+.top{
+  position:absolute;z-index:1000;top:0;left:0;right:0;
+  padding:calc(env(safe-area-inset-top) + 14px) 18px 32px;
+  pointer-events:none;
+  background:linear-gradient(180deg,rgba(11,16,23,.98),rgba(11,16,23,.82) 64%,rgba(11,16,23,0));
+}
+.brand{font-size:14px;font-weight:800;letter-spacing:.17em;color:var(--gold)}
+.countline{display:flex;align-items:flex-end;gap:10px;margin-top:6px}
+.count{font-size:68px;line-height:.92;font-weight:850}
+.unit{font-size:23px;font-weight:800;padding-bottom:8px}
+.subtitle{margin-top:14px;color:var(--muted);font-size:15px}
 
-    .search{
-      display:none;position:absolute;z-index:1002;top:176px;left:14px;right:86px;
-    }
-    .search input{
-      width:100%;border:1px solid var(--line);border-radius:14px;
-      background:rgba(17,25,37,.97);color:#fff;padding:12px 14px;outline:none;
-    }
+.search{
+  display:none;position:absolute;z-index:1002;top:176px;left:14px;right:86px;
+}
+.search input{
+  width:100%;border:1px solid var(--line);border-radius:14px;
+  background:rgba(17,25,37,.97);color:#fff;padding:12px 14px;outline:none;
+}
 
-    .side{
-      position:absolute;z-index:1001;right:14px;bottom:128px;
-      display:flex;flex-direction:column;gap:11px;
-    }
-    .round{
-      width:58px;height:58px;border-radius:50%;border:1px solid var(--line);
-      background:rgba(17,25,37,.96);color:#fff;font-size:22px;box-shadow:0 8px 22px rgba(0,0,0,.35)
-    }
+.side{
+  position:absolute;z-index:1001;right:14px;bottom:128px;
+  display:flex;flex-direction:column;gap:11px;
+}
+.round{
+  width:58px;height:58px;border-radius:50%;border:1px solid var(--line);
+  background:rgba(17,25,37,.96);color:#fff;font-size:22px;box-shadow:0 8px 22px rgba(0,0,0,.35)
+}
+.legend{
+  position:absolute;z-index:999;left:12px;bottom:132px;
+  background:rgba(11,16,23,.86);border:1px solid var(--line);
+  border-radius:12px;padding:8px 10px;font-size:11px;color:#cbd3dd
+}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
 
-    .legend{
-      position:absolute;z-index:999;left:12px;bottom:132px;
-      background:rgba(11,16,23,.86);border:1px solid var(--line);
-      border-radius:12px;padding:8px 10px;font-size:11px;color:#cbd3dd
-    }
-    .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.bottom{
+  position:absolute;z-index:1001;left:0;right:0;bottom:0;
+  padding:14px 14px calc(env(safe-area-inset-bottom) + 12px);
+  background:linear-gradient(0deg,rgba(11,16,23,.99),rgba(11,16,23,.8),rgba(11,16,23,0));
+}
+.hint{text-align:center;color:var(--muted);font-size:13px;margin-bottom:8px}
+.bar{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.action{
+  border:1px solid var(--line);background:var(--panel);color:#fff;
+  padding:12px 6px;border-radius:14px;font-weight:800;font-size:13px
+}
 
-    .bottom{
-      position:absolute;z-index:1001;left:0;right:0;bottom:0;
-      padding:14px 14px calc(env(safe-area-inset-bottom) + 12px);
-      background:linear-gradient(0deg,rgba(11,16,23,.99),rgba(11,16,23,.8),rgba(11,16,23,0));
-    }
-    .hint{text-align:center;color:var(--muted);font-size:13px;margin-bottom:8px}
-    .bar{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-    .action{
-      border:1px solid var(--line);background:var(--panel);color:#fff;
-      padding:12px 6px;border-radius:14px;font-weight:800;font-size:13px
-    }
+.panel{
+  display:none;position:absolute;z-index:1200;left:10px;right:10px;bottom:10px;
+  max-height:84vh;overflow:auto;background:#101823;border:1px solid var(--line);
+  border-radius:22px;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.55)
+}
+.panel h2{margin:0 0 14px;font-size:20px}
+.close{float:right;border:0;background:none;color:#fff;font-size:26px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field{margin-bottom:10px}
+.field label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
+.field input,.field select,.field textarea{
+  width:100%;border:1px solid var(--line);background:#0c121a;color:#fff;border-radius:12px;
+  padding:11px 12px;outline:none
+}
+.field textarea{min-height:88px;resize:vertical}
+.save{
+  width:100%;border:0;border-radius:14px;background:var(--gold);color:#151515;
+  font-weight:850;padding:13px 14px
+}
+.danger{
+  width:100%;margin-top:8px;border:1px solid #553538;border-radius:14px;
+  background:#211517;color:#ffb6bb;font-weight:800;padding:11px
+}
+.tiny{font-size:11px;color:var(--muted);line-height:1.45}
+.notice{
+  display:none;position:absolute;z-index:1300;left:50%;top:18%;transform:translateX(-50%);
+  width:min(90vw,420px);background:#101823;border:1px solid var(--line);border-radius:16px;
+  padding:14px 16px;box-shadow:0 12px 36px rgba(0,0,0,.45)
+}
+.notice strong{display:block;margin-bottom:6px}
+.notice .progress{height:8px;background:#202c3a;border-radius:999px;overflow:hidden;margin-top:10px}
+.notice .progress > div{height:100%;background:var(--gold);width:0%}
+.popup h3{margin:0 0 6px;font-size:16px}
+.popup .meta{font-size:12px;color:#687386;margin:2px 0}
+.popup .memo{font-size:12px;margin-top:7px;padding-top:7px;border-top:1px solid #eee}
+.pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:800;margin-top:5px}
+.leaflet-control-attribution{font-size:9px!important}
 
-    .panel{
-      display:none;position:absolute;z-index:1200;left:10px;right:10px;bottom:10px;
-      max-height:84vh;overflow:auto;background:#101823;border:1px solid var(--line);
-      border-radius:22px;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.55)
-    }
-    .panel h2{margin:0 0 14px;font-size:20px}
-    .close{float:right;border:0;background:none;color:#fff;font-size:26px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .field{margin-bottom:10px}
-    .field label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
-    .field input,.field select,.field textarea{
-      width:100%;border:1px solid var(--line);background:#0c121a;color:#fff;border-radius:12px;
-      padding:11px 12px;outline:none
-    }
-    .field textarea{min-height:88px;resize:vertical}
-    .save{
-      width:100%;border:0;border-radius:14px;background:var(--gold);color:#151515;
-      font-weight:850;padding:13px 14px
-    }
-    .danger{
-      width:100%;margin-top:8px;border:1px solid #553538;border-radius:14px;
-      background:#211517;color:#ffb6bb;font-weight:800;padding:11px
-    }
-    .tiny{font-size:11px;color:var(--muted);line-height:1.45}
-
-    .popup h3{margin:0 0 6px;font-size:16px}
-    .popup .meta{font-size:12px;color:#687386;margin:2px 0}
-    .popup .memo{font-size:12px;margin-top:7px;padding-top:7px;border-top:1px solid #eee}
-    .pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:800;margin-top:5px}
-
-    .leaflet-control-attribution{font-size:9px!important}
-
-    @media (min-width:800px){
-      .panel{left:auto;right:18px;width:430px}
-      .bottom{left:auto;width:560px}
-    }
-  </style>
+@media (min-width:800px){
+  .panel{left:auto;right:18px;width:430px}
+  .bottom{left:auto;width:560px}
+}
+</style>
 </head>
 <body>
 <div id="app">
@@ -125,7 +122,7 @@
   <div class="top">
     <div class="brand">株式会社IC SALES MAP</div>
     <div class="countline"><div id="count" class="count">0</div><div class="unit">社</div></div>
-    <div class="subtitle">飛び込み営業・営業ネタ・訪問履歴を地図で蓄積</div>
+    <div class="subtitle">住所だけで自動ピン化・飛び込み営業ネタを蓄積</div>
   </div>
 
   <div id="searchBox" class="search">
@@ -148,7 +145,7 @@
   </div>
 
   <div class="bottom">
-    <div class="hint">ピンをタップすると営業ネタが表示されます</div>
+    <div class="hint">Excelは「会社名＋住所」だけでも読み込めます</div>
     <div class="bar">
       <button class="action" type="button" onclick="document.getElementById('excelFile').click()">Excel読込</button>
       <button class="action" type="button" onclick="downloadTemplate()">ひな形</button>
@@ -157,17 +154,23 @@
     <input id="excelFile" type="file" accept=".xlsx,.xls,.csv" style="display:none" />
   </div>
 
+  <div id="notice" class="notice">
+    <strong id="noticeTitle">住所から位置を取得中...</strong>
+    <div id="noticeText" class="tiny"></div>
+    <div class="progress"><div id="progressBar"></div></div>
+  </div>
+
   <div id="formPanel" class="panel">
     <button class="close" type="button" onclick="closeForm()">×</button>
     <h2 id="formTitle">営業先を登録</h2>
     <input id="editIndex" type="hidden" />
 
     <div class="field"><label>会社名</label><input id="fName" /></div>
-    <div class="field"><label>住所</label><input id="fAddress" /></div>
+    <div class="field"><label>住所 ※ここだけでOK</label><input id="fAddress" placeholder="例：大阪府大阪市西区北堀江1-1-4" /></div>
 
     <div class="grid">
-      <div class="field"><label>緯度</label><input id="fLat" inputmode="decimal" /></div>
-      <div class="field"><label>経度</label><input id="fLng" inputmode="decimal" /></div>
+      <div class="field"><label>緯度（自動入力）</label><input id="fLat" inputmode="decimal" /></div>
+      <div class="field"><label>経度（自動入力）</label><input id="fLng" inputmode="decimal" /></div>
     </div>
 
     <div class="grid">
@@ -202,22 +205,19 @@
 
     <button class="save" type="button" onclick="saveCompany()">保存</button>
     <button id="deleteBtn" class="danger" type="button" style="display:none" onclick="deleteCompany()">この営業先を削除</button>
-    <p class="tiny">※ 現在の保存先はこの端末のブラウザ内です。複数人リアルタイム共有は次の段階でクラウドDB化できます。</p>
+    <p class="tiny">住所から位置が取得できなかった場合だけ、緯度・経度を手入力できます。</p>
   </div>
 </div>
 
 <script>
-const STORAGE_KEY='ic_sales_map_v1';
+const STORAGE_KEY='ic_sales_map_v2_address_auto';
 const map=L.map('map',{zoomControl:false}).setView([32.75,130.9],7);
-
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
   maxZoom:19, attribution:'&copy; OpenStreetMap &copy; CARTO'
 }).addTo(map);
 
 const seed=[
-  {name:'サンプル福岡',address:'福岡県福岡市',lat:33.5902,lng:130.4017,industry:'自動車',staff:'',status:'未訪問',date:'',phone:'',neta:'防犯カメラ未確認。駐車場広め。',next:'飛び込み候補'},
-  {name:'サンプル熊本',address:'熊本県熊本市',lat:32.8031,lng:130.7079,industry:'建設',staff:'',status:'訪問済',date:'',phone:'',neta:'社長は夕方在社率高め。',next:'再訪'},
-  {name:'サンプル鹿児島',address:'鹿児島県鹿児島市',lat:31.5966,lng:130.5571,industry:'運送',staff:'',status:'アポ',date:'',phone:'',neta:'車両台数多い。',next:'防犯カメラ提案'}
+  {name:'サンプル福岡',address:'福岡県福岡市',lat:33.5902,lng:130.4017,industry:'自動車',staff:'',status:'未訪問',date:'',phone:'',neta:'防犯カメラ未確認。駐車場広め。',next:'飛び込み候補'}
 ];
 
 let companies=loadData();
@@ -246,10 +246,6 @@ function iconFor(status){
     iconSize:[15,15],iconAnchor:[7.5,7.5]
   });
 }
-function pillStyle(status){
-  const c=colorFor(status);
-  return `background:${c}22;color:#222;border:1px solid ${c};`;
-}
 function esc(v){
   return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
 }
@@ -272,7 +268,7 @@ function render(){
         <h3>${esc(c.name)}</h3>
         <div class="meta">${esc(c.address)}</div>
         <div class="meta">業種：${esc(c.industry||'-')}　担当：${esc(c.staff||'-')}</div>
-        <span class="pill" style="${pillStyle(c.status)}">${esc(c.status||'未訪問')}</span>
+        <span class="pill" style="background:${colorFor(c.status)}22;border:1px solid ${colorFor(c.status)};color:#222">${esc(c.status||'未訪問')}</span>
         <div class="memo"><b>営業ネタ</b><br>${esc(c.neta||'なし')}</div>
         <div class="memo"><b>次回アクション</b><br>${esc(c.next||'未設定')}</div>
         <button onclick="editCompany(${c._index})" style="margin-top:10px;width:100%;padding:9px;border:0;border-radius:10px;background:#111827;color:#fff;font-weight:800">編集</button>
@@ -309,15 +305,6 @@ function openForm(){
   document.getElementById('fStatus').value='未訪問';
   document.getElementById('deleteBtn').style.display='none';
   document.getElementById('formPanel').style.display='block';
-
-  if(navigator.geolocation){
-    navigator.geolocation.getCurrentPosition(p=>{
-      if(!document.getElementById('fLat').value){
-        document.getElementById('fLat').value=p.coords.latitude.toFixed(6);
-        document.getElementById('fLng').value=p.coords.longitude.toFixed(6);
-      }
-    });
-  }
 }
 function closeForm(){ document.getElementById('formPanel').style.display='none'; }
 
@@ -342,17 +329,65 @@ function editCompany(i){
 }
 window.editCompany=editCompany;
 
-function saveCompany(){
+async function geocodeAddress(address){
+  const q=String(address||'').trim();
+  if(!q) return null;
+
+  const url='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q='+encodeURIComponent(q);
+  const res=await fetch(url,{headers:{'Accept':'application/json'}});
+  if(!res.ok) throw new Error('位置検索エラー');
+  const data=await res.json();
+  if(!Array.isArray(data)||!data.length) return null;
+
+  return {
+    lat:parseFloat(data[0].lat),
+    lng:parseFloat(data[0].lon),
+    display_name:data[0].display_name||q
+  };
+}
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+function showNotice(title,text,percent){
+  const n=document.getElementById('notice');
+  n.style.display='block';
+  document.getElementById('noticeTitle').textContent=title;
+  document.getElementById('noticeText').textContent=text||'';
+  document.getElementById('progressBar').style.width=Math.max(0,Math.min(100,percent||0))+'%';
+}
+function hideNotice(){ document.getElementById('notice').style.display='none'; }
+
+async function saveCompany(){
   const name=document.getElementById('fName').value.trim();
-  const lat=parseFloat(document.getElementById('fLat').value);
-  const lng=parseFloat(document.getElementById('fLng').value);
+  const address=document.getElementById('fAddress').value.trim();
+  let lat=parseFloat(document.getElementById('fLat').value);
+  let lng=parseFloat(document.getElementById('fLng').value);
+
   if(!name) return alert('会社名を入力してください');
-  if(!Number.isFinite(lat)||!Number.isFinite(lng)) return alert('緯度・経度を入力してください');
+  if(!address && (!Number.isFinite(lat)||!Number.isFinite(lng))){
+    return alert('住所を入力してください');
+  }
+
+  if((!Number.isFinite(lat)||!Number.isFinite(lng)) && address){
+    try{
+      showNotice('住所から位置を取得中...',address,35);
+      const pos=await geocodeAddress(address);
+      if(!pos){
+        hideNotice();
+        return alert('住所から位置を取得できませんでした。\n番地まで含めて住所を確認してください。');
+      }
+      lat=pos.lat; lng=pos.lng;
+      document.getElementById('fLat').value=lat.toFixed(6);
+      document.getElementById('fLng').value=lng.toFixed(6);
+      showNotice('位置を取得しました','地図へ反映しています',85);
+    }catch(e){
+      hideNotice();
+      return alert('住所検索に失敗しました。通信環境を確認してもう一度お試しください。');
+    }
+  }
 
   const c={
-    name,
-    address:document.getElementById('fAddress').value.trim(),
-    lat,lng,
+    name,address,lat,lng,
     industry:document.getElementById('fIndustry').value.trim(),
     staff:document.getElementById('fStaff').value.trim(),
     status:document.getElementById('fStatus').value,
@@ -363,8 +398,10 @@ function saveCompany(){
   };
   const idx=document.getElementById('editIndex').value;
   if(idx==='') companies.push(c); else companies[Number(idx)]=c;
-  persist(); render(); closeForm();
+  persist(); render(); closeForm(); hideNotice();
+  fitAll();
 }
+
 function deleteCompany(){
   const idx=Number(document.getElementById('editIndex').value);
   if(!Number.isInteger(idx)) return;
@@ -376,13 +413,16 @@ function deleteCompany(){
 document.getElementById('excelFile').addEventListener('change', async e=>{
   const file=e.target.files[0];
   if(!file) return;
+
   try{
     const buf=await file.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array'});
     const ws=wb.Sheets[wb.SheetNames[0]];
     const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
 
-    const imported=rows.map(r=>({
+    if(!rows.length) return alert('Excelにデータがありません');
+
+    let imported=rows.map(r=>({
       name:r['会社名']||r['企業名']||'',
       address:r['住所']||'',
       lat:parseFloat(r['緯度']),
@@ -394,17 +434,53 @@ document.getElementById('excelFile').addEventListener('change', async e=>{
       phone:r['電話番号']||'',
       neta:r['営業ネタ']||r['共有情報']||'',
       next:r['次回アクション']||''
-    })).filter(x=>x.name && Number.isFinite(x.lat) && Number.isFinite(x.lng));
+    })).filter(x=>x.name && x.address);
 
     if(!imported.length){
-      alert('読み込めるデータがありません。\n「会社名・緯度・経度」の列を確認してください。');
-      return;
+      return alert('「会社名」と「住所」の列を確認してください。');
     }
-    const replace=confirm(`${imported.length}件読み込みました。\nOK＝現在データを置き換え\nキャンセル＝現在データへ追加`);
+
+    const needGeo=imported.filter(x=>!Number.isFinite(x.lat)||!Number.isFinite(x.lng));
+    let failed=[];
+
+    for(let i=0;i<needGeo.length;i++){
+      const c=needGeo[i];
+      showNotice(
+        '住所から位置を取得中...',
+        `${i+1}/${needGeo.length}件　${c.name}`,
+        Math.round((i/Math.max(1,needGeo.length))*100)
+      );
+      try{
+        const pos=await geocodeAddress(c.address);
+        if(pos){
+          c.lat=pos.lat; c.lng=pos.lng;
+        }else{
+          failed.push(c.name);
+        }
+      }catch(err){
+        failed.push(c.name);
+      }
+      if(i<needGeo.length-1) await sleep(1100);
+    }
+
+    imported=imported.filter(x=>Number.isFinite(x.lat)&&Number.isFinite(x.lng));
+
+    if(!imported.length){
+      hideNotice();
+      return alert('住所から位置を取得できるデータがありませんでした。');
+    }
+
+    const replace=confirm(`${imported.length}件を地図に反映できます。\nOK＝現在データを置き換え\nキャンセル＝現在データへ追加`);
     companies=replace?imported:[...companies,...imported];
-    persist(); render(); fitAll();
-    alert('Excelデータを反映しました');
+    persist(); render(); fitAll(); hideNotice();
+
+    if(failed.length){
+      alert(`反映完了。\nただし ${failed.length}件は住所から位置を取得できませんでした。\n住所を番地まで確認してください。`);
+    }else{
+      alert('Excelの住所から自動で位置を取得し、地図へ反映しました。');
+    }
   }catch(err){
+    hideNotice();
     alert('Excel読み込みに失敗しました: '+err.message);
   }finally{
     e.target.value='';
@@ -438,32 +514,25 @@ function rowsForExcel(){
     '次回アクション':c.next
   }));
 }
+
 function exportExcel(){
   const ws=XLSX.utils.json_to_sheet(rowsForExcel());
-  ws['!cols']=[22,30,12,12,14,12,14,14,18,42,34].map(w=>({wch:w}));
+  ws['!cols']=[22,32,12,12,14,12,14,14,18,42,34].map(w=>({wch:w}));
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'営業リスト');
   XLSX.writeFile(wb,'株式会社IC_営業リスト.xlsx');
 }
+
 function downloadTemplate(){
-  const rows=[{
-    '会社名':'株式会社サンプル',
-    '住所':'福岡県福岡市博多区',
-    '緯度':33.5902,
-    '経度':130.4017,
-    '業種':'自動車',
-    '担当者':'山田',
-    'ステータス':'未訪問',
-    '最終訪問日':'',
-    '電話番号':'092-000-0000',
-    '営業ネタ':'社長は16時以降在社。防犯カメラなし。',
-    '次回アクション':'8/30 16時再訪'
-  }];
+  const rows=[
+    {'会社名':'株式会社サンプルA','住所':'大阪府大阪市西区北堀江1-1-4','業種':'自動車','担当者':'','ステータス':'未訪問','最終訪問日':'','電話番号':'','営業ネタ':'防犯カメラ未確認','次回アクション':'飛び込み候補'},
+    {'会社名':'株式会社サンプルB','住所':'福岡県福岡市博多区博多駅前1丁目','業種':'建設','担当者':'','ステータス':'未訪問','最終訪問日':'','電話番号':'','営業ネタ':'社長夕方在社','次回アクション':'再訪'}
+  ];
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws['!cols']=[22,30,12,12,14,12,14,14,18,42,34].map(w=>({wch:w}));
+  ws['!cols']=[22,34,14,12,14,14,18,42,34].map(w=>({wch:w}));
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'営業リスト');
-  XLSX.writeFile(wb,'株式会社IC_営業MAP_ひな形.xlsx');
+  XLSX.writeFile(wb,'株式会社IC_営業MAP_住所だけひな形.xlsx');
 }
 
 render();
