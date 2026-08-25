@@ -1,629 +1,202 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1017">
 <title>株式会社IC 営業MAP</title>
-
 <link rel="manifest" href="./manifest.webmanifest">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{
-  --bg:#0b1017;--panel:#111925;--line:#263243;--text:#f7f9fc;--muted:#96a2b3;
-  --gold:#f1c340;--green:#43d18f;--blue:#5ba7ff;--purple:#a97cff;--red:#ff6969;
-}
-*{box-sizing:border-box}
-html,body,#app,#map{height:100%;margin:0}
-html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-body{overflow:hidden}
-button,input,select,textarea{font:inherit}
-#app{position:relative}
-#map{width:100%;background:#e9ecef}
-
-.top{
-  position:absolute;z-index:1000;top:0;left:0;right:0;
-  padding:calc(env(safe-area-inset-top) + 14px) 18px 32px;
-  pointer-events:none;
-  background:linear-gradient(180deg,rgba(11,16,23,.98),rgba(11,16,23,.80) 64%,rgba(11,16,23,0));
-}
-.brand{font-size:14px;font-weight:800;letter-spacing:.17em;color:var(--gold)}
-.countline{display:flex;align-items:flex-end;gap:10px;margin-top:6px}
-.count{font-size:68px;line-height:.92;font-weight:850}
-.unit{font-size:23px;font-weight:800;padding-bottom:8px}
-.subtitle{margin-top:14px;color:#d1d7e0;font-size:15px}
-
-.tabs{
-  position:absolute;z-index:1002;left:12px;right:12px;top:166px;
-  display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;
-}
-.tab{
-  border:1px solid var(--line);background:rgba(17,25,37,.95);color:#cbd3dd;
-  border-radius:12px;padding:9px 6px;font-size:12px;font-weight:800
-}
-.tab.active{background:var(--gold);color:#151515;border-color:var(--gold)}
-
-.search{
-  display:none;position:absolute;z-index:1003;top:214px;left:14px;right:86px;
-}
-.search input{
-  width:100%;border:1px solid var(--line);border-radius:14px;
-  background:rgba(17,25,37,.97);color:#fff;padding:12px 14px;outline:none;
-}
-
-.side{
-  position:absolute;z-index:1001;right:14px;bottom:138px;
-  display:flex;flex-direction:column;gap:11px;
-}
-.round{
-  width:58px;height:58px;border-radius:50%;border:1px solid var(--line);
-  background:rgba(17,25,37,.96);color:#fff;font-size:22px;box-shadow:0 8px 22px rgba(0,0,0,.35)
-}
-.legend{
-  position:absolute;z-index:999;left:12px;bottom:142px;
-  background:rgba(11,16,23,.88);border:1px solid var(--line);
-  border-radius:12px;padding:8px 10px;font-size:11px;color:#cbd3dd
-}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
-
-.bottom{
-  position:absolute;z-index:1001;left:0;right:0;bottom:0;
-  padding:14px 14px calc(env(safe-area-inset-bottom) + 12px);
-  background:linear-gradient(0deg,rgba(11,16,23,.99),rgba(11,16,23,.8),rgba(11,16,23,0));
-}
-.hint{text-align:center;color:#d1d7e0;font-size:13px;margin-bottom:8px}
-.bar{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-.action{
-  border:1px solid var(--line);background:var(--panel);color:#fff;
-  padding:12px 6px;border-radius:14px;font-weight:800;font-size:13px
-}
-
-.panel{
-  display:none;position:absolute;z-index:1200;left:10px;right:10px;bottom:10px;
-  max-height:86vh;overflow:auto;background:#101823;border:1px solid var(--line);
-  border-radius:22px;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.55)
-}
-.panel h2{margin:0 0 14px;font-size:20px}
-.close{float:right;border:0;background:none;color:#fff;font-size:26px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.field{margin-bottom:10px}
-.field label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
-.field input,.field select,.field textarea{
-  width:100%;border:1px solid var(--line);background:#0c121a;color:#fff;border-radius:12px;
-  padding:11px 12px;outline:none
-}
-.field textarea{min-height:88px;resize:vertical}
-.inline-btn{
-  width:100%;margin-bottom:10px;border:1px solid #315276;background:#10243a;color:#cfe6ff;
-  border-radius:12px;padding:10px 12px;font-weight:800
-}
-.save{
-  width:100%;border:0;border-radius:14px;background:var(--gold);color:#151515;
-  font-weight:850;padding:13px 14px
-}
-.danger{
-  width:100%;margin-top:8px;border:1px solid #553538;border-radius:14px;
-  background:#211517;color:#ffb6bb;font-weight:800;padding:11px
-}
-.tiny{font-size:11px;color:var(--muted);line-height:1.45}
-
-.notice{
-  display:none;position:absolute;z-index:1300;left:50%;top:18%;transform:translateX(-50%);
-  width:min(90vw,420px);background:#101823;border:1px solid var(--line);border-radius:16px;
-  padding:14px 16px;box-shadow:0 12px 36px rgba(0,0,0,.45)
-}
-.notice strong{display:block;margin-bottom:6px}
-.notice .progress{height:8px;background:#202c3a;border-radius:999px;overflow:hidden;margin-top:10px}
-.notice .progress > div{height:100%;background:var(--gold);width:0%}
-
-.manage-list{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}
-.manage-row{
-  display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;
-  border:1px solid var(--line);background:#0c121a;border-radius:12px;padding:10px
-}
-.manage-row small{color:var(--muted);display:block;margin-top:3px}
-.badge{
-  border:1px solid var(--line);border-radius:999px;padding:3px 7px;font-size:10px;color:#cbd3dd
-}
-.manage-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.manage-actions button{border-radius:12px;padding:11px;font-weight:800}
-.delete-selected{border:1px solid #704049;background:#24171a;color:#ffb6bb}
-.delete-all{border:1px solid #7b2d2d;background:#3a1515;color:#fff}
-.select-actions{display:flex;gap:8px;margin:8px 0}
-.select-actions button{
-  flex:1;border:1px solid var(--line);background:#172231;color:#fff;border-radius:10px;padding:8px;font-weight:700;font-size:12px
-}
-
-.gps-dot{
-  width:18px;height:18px;border-radius:50%;background:#1677ff;border:3px solid #fff;
-  box-shadow:0 0 0 5px rgba(22,119,255,.24),0 2px 10px rgba(0,0,0,.35)
-}
-.popup h3{margin:0 0 6px;font-size:16px}
-.popup .meta{font-size:12px;color:#687386;margin:2px 0}
-.popup .memo{font-size:12px;margin-top:7px;padding-top:7px;border-top:1px solid #eee}
-.pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:800;margin-top:5px}
-.leaflet-control-attribution{font-size:9px!important}
-
-@media (min-width:800px){
-  .panel{left:auto;right:18px;width:440px}
-  .bottom{left:auto;width:560px}
-  .tabs{left:20px;right:auto;width:420px}
-}
+:root{--bg:#0b1017;--panel:#111925;--line:#263243;--text:#f7f9fc;--muted:#96a2b3;--gold:#f1c340;--green:#43d18f;--blue:#5ba7ff;--purple:#a97cff;--red:#ff6969}
+*{box-sizing:border-box}html,body,#app,#map{height:100%;margin:0}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);overflow:hidden}button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:none!important}
+.auth{position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(180deg,#0b1017,#101b29)}.card{width:min(92vw,430px);background:#101823;border:1px solid var(--line);border-radius:24px;padding:22px}.brand{color:var(--gold);font-weight:900;letter-spacing:.16em}.card h1{margin:12px 0 4px}.card p,.tiny{color:var(--muted);font-size:12px;line-height:1.5}.card input,.field input,.field select,.field textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:#0b1017;color:#fff}.card input{margin-top:10px}.card button,.save{width:100%;margin-top:12px;padding:12px;border:0;border-radius:12px;background:var(--gold);color:#151515;font-weight:900}
+#app{position:relative}#map{width:100%}.top{position:absolute;z-index:1000;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 12px) 16px 28px;background:linear-gradient(180deg,rgba(11,16,23,.99),rgba(11,16,23,.82),rgba(11,16,23,0));pointer-events:none}.count{font-size:62px;font-weight:900;line-height:.95}.subtitle{font-size:12px;color:#d4dae3;margin-top:6px}.user{position:absolute;right:16px;top:calc(env(safe-area-inset-top) + 12px);font-size:11px;text-align:right;color:#d4dae3}
+.tabs{position:absolute;z-index:1002;left:10px;right:10px;top:157px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.tab{padding:9px;border:1px solid var(--line);border-radius:11px;background:#111925;color:#cbd3dd;font-weight:800;font-size:12px}.tab.active{background:var(--gold);color:#151515}
+.side{position:absolute;z-index:1002;right:12px;bottom:142px;display:flex;flex-direction:column;gap:9px}.round{width:54px;height:54px;border-radius:50%;border:1px solid var(--line);background:#111925;color:#fff;font-size:20px}.bottom{position:absolute;z-index:1002;left:0;right:0;bottom:0;padding:12px 12px calc(env(safe-area-inset-bottom) + 10px);background:linear-gradient(0deg,rgba(11,16,23,.99),rgba(11,16,23,.82),rgba(11,16,23,0))}.bar{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}.action{padding:11px;border:1px solid var(--line);border-radius:12px;background:#111925;color:#fff;font-weight:800;font-size:12px}
+.search{display:none;position:absolute;z-index:1003;top:202px;left:12px;right:82px}.search input{width:100%;padding:11px;border-radius:12px;border:1px solid var(--line);background:#111925;color:#fff}
+.panel{display:none;position:absolute;z-index:2100;left:8px;right:8px;bottom:8px;max-height:91vh;overflow:auto;background:#101823;border:1px solid var(--line);border-radius:22px;padding:15px}.close{float:right;background:none;border:0;color:#fff;font-size:25px}.panel h2{margin:0 0 12px}.panel h3{color:#f5d56d;font-size:15px;margin:18px 0 8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.field{margin-bottom:8px}.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}.field textarea{min-height:70px;resize:vertical}.section{border:1px solid var(--line);border-radius:14px;padding:11px;margin-bottom:10px;background:#0d141d}.section b{display:block;margin-bottom:8px}.danger{width:100%;margin-top:8px;padding:11px;border-radius:12px;border:1px solid #6c3e44;background:#261719;color:#ffb6bb;font-weight:800}
+.popup h3{margin:0 0 5px}.popup .meta{font-size:12px;color:#697587}.popup .memo{font-size:12px;margin-top:6px;padding-top:6px;border-top:1px solid #eee}
+.manage-row{display:grid;grid-template-columns:26px 1fr;gap:8px;border:1px solid var(--line);padding:9px;border-radius:10px;margin:7px 0}.filter-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.filter-actions button{padding:10px;border-radius:11px;border:1px solid var(--line);font-weight:800}.secondary{background:#172331;color:#fff}.primary{background:var(--gold);color:#151515}.account-row{border:1px solid var(--line);padding:9px;border-radius:10px;margin:7px 0;background:#0c121a}
 </style>
 </head>
 <body>
-<div id="app">
-  <div id="map"></div>
+<div id="auth" class="auth">
+  <div class="card">
+    <div class="brand">株式会社IC SALES MAP</div>
+    <h1 id="authTitle">ログイン</h1>
+    <p id="authDesc">会社共通の営業データにログインします。</p>
+    <input id="authName" class="hidden" placeholder="表示名">
+    <input id="authEmail" type="email" placeholder="メールアドレス">
+    <input id="authPass" type="password" placeholder="パスワード">
+    <button onclick="authMain()" id="authBtn">ログイン</button>
+    <div id="authMsg" class="tiny"></div>
+  </div>
+</div>
 
+<div id="app" class="hidden">
+  <div id="map"></div>
   <div class="top">
     <div class="brand">株式会社IC SALES MAP</div>
-    <div class="countline"><div id="count" class="count">0</div><div class="unit">社</div></div>
-    <div class="subtitle">飛び込み・見込・顧客を分けて管理</div>
+    <div class="count"><span id="count">0</span><span style="font-size:22px"> 社</span></div>
+    <div class="subtitle">共有DB / メーカー・販売店検索対応</div>
+    <div id="userMini" class="user"></div>
   </div>
-
   <div class="tabs">
-    <button id="tabLead" class="tab active" onclick="setCategory('飛び込みリスト')">飛び込みリスト</button>
-    <button id="tabProspect" class="tab" onclick="setCategory('見込')">見込</button>
-    <button id="tabCustomer" class="tab" onclick="setCategory('顧客')">顧客</button>
+    <button id="t1" class="tab active" onclick="setCategory('飛び込みリスト')">飛び込み</button>
+    <button id="t2" class="tab" onclick="setCategory('見込')">見込</button>
+    <button id="t3" class="tab" onclick="setCategory('顧客')">顧客</button>
   </div>
-
-  <div id="searchBox" class="search">
-    <input id="searchInput" placeholder="会社名・住所・業種・営業ネタで検索">
-  </div>
-
-  <div class="legend">
-    <div><span class="dot" style="background:#f1c340"></span>未訪問　
-      <span class="dot" style="background:#43d18f"></span>訪問済</div>
-    <div style="margin-top:4px"><span class="dot" style="background:#5ba7ff"></span>アポ/商談　
-      <span class="dot" style="background:#a97cff"></span>契約　
-      <span class="dot" style="background:#ff6969"></span>NG</div>
-  </div>
-
+  <div id="searchBox" class="search"><input id="searchInput" placeholder="会社名・社長名・メーカー・販売店で検索"></div>
   <div class="side">
-    <button class="round" type="button" onclick="toggleSearch()" title="検索">⌕</button>
-    <button class="round" type="button" onclick="locateMe()" title="現在地">◎</button>
-    <button class="round" type="button" onclick="fitAll()" title="全件表示">▦</button>
-    <button class="round" type="button" onclick="openForm()" title="新規登録">＋</button>
-    <button class="round" type="button" onclick="openManage()" title="削除管理">☰</button>
+    <button class="round" onclick="toggleSearch()">⌕</button>
+    <button class="round" onclick="openPanel('filterPanel')">⚙</button>
+    <button class="round" onclick="locateMe()">◎</button>
+    <button class="round" onclick="fitAll()">▦</button>
+    <button class="round" onclick="openForm()">＋</button>
+    <button class="round" onclick="openManage()">☰</button>
+    <button class="round" onclick="openAccount()">♙</button>
   </div>
-
   <div class="bottom">
-    <div class="hint">Excelはシート1=飛び込み / シート2=見込 / シート3=顧客</div>
     <div class="bar">
-      <button class="action" type="button" onclick="document.getElementById('excelFile').click()">Excel読込</button>
-      <button class="action" type="button" onclick="downloadTemplate()">ひな形</button>
-      <button class="action" type="button" onclick="exportExcel()">Excel出力</button>
+      <button class="action" onclick="document.getElementById('excelFile').click()">Excel読込</button>
+      <button class="action" onclick="downloadTemplate()">ひな形</button>
+      <button class="action" onclick="exportExcel()">Excel出力</button>
     </div>
     <input id="excelFile" type="file" accept=".xlsx,.xls,.csv" style="display:none">
   </div>
 
-  <div id="notice" class="notice">
-    <strong id="noticeTitle">処理中...</strong>
-    <div id="noticeText" class="tiny"></div>
-    <div class="progress"><div id="progressBar"></div></div>
+  <div id="formPanel" class="panel">
+    <button class="close" onclick="closePanel('formPanel')">×</button><h2 id="formTitle">営業先登録</h2>
+    <input id="editId" type="hidden">
+    <div class="field"><label>分類</label><select id="fCategory"><option>飛び込みリスト</option><option>見込</option><option>顧客</option></select></div>
+    <div class="grid"><div class="field"><label>会社名</label><input id="fName"></div><div class="field"><label>業種</label><input id="fIndustry"></div></div>
+    <div class="field"><label>住所</label><input id="fAddress"></div>
+    <div class="grid"><div class="field"><label>社長名</label><input id="fPresident"></div><div class="field"><label>社長携帯</label><input id="fPresidentMobile"></div></div>
+    <div class="grid"><div class="field"><label>会社電話</label><input id="fPhone"></div><div class="field"><label>担当者</label><input id="fStaff"></div></div>
+    <div class="grid"><div class="field"><label>ステータス</label><select id="fStatus"><option>未訪問</option><option>訪問済</option><option>アポ</option><option>商談</option><option>契約</option><option>NG</option></select></div><div class="field"><label>最終訪問日</label><input id="fDate" type="date"></div></div>
+    <div class="field"><label>営業ネタ</label><textarea id="fNeta"></textarea></div>
+    <div class="field"><label>次回アクション</label><textarea id="fNext"></textarea></div>
+    <h3>設備情報</h3><div id="equipRoot"></div>
+    <div class="grid"><div class="field"><label>緯度</label><input id="fLat"></div><div class="field"><label>経度</label><input id="fLng"></div></div>
+    <button class="save" onclick="saveCompany()">保存</button>
+    <button id="deleteBtn" class="danger hidden" onclick="deleteCurrent()">この営業先を削除</button>
   </div>
 
-  <div id="formPanel" class="panel">
-    <button class="close" type="button" onclick="closeForm()">×</button>
-    <h2 id="formTitle">営業先を登録</h2>
-    <input id="editIndex" type="hidden">
-
-    <div class="field"><label>分類</label>
-      <select id="fCategory">
-        <option>飛び込みリスト</option>
-        <option>見込</option>
-        <option>顧客</option>
-      </select>
-    </div>
-
-    <div class="field"><label>会社名</label><input id="fName"></div>
-    <div class="field"><label>住所 ※ここだけでOK</label><input id="fAddress" placeholder="例：大阪府大阪市西区北堀江1-1-4"></div>
-    <button class="inline-btn" type="button" onclick="useCurrentLocationForForm()">現在地をこの営業先の位置に使う</button>
-
-    <div class="grid">
-      <div class="field"><label>緯度（自動入力）</label><input id="fLat" inputmode="decimal"></div>
-      <div class="field"><label>経度（自動入力）</label><input id="fLng" inputmode="decimal"></div>
-    </div>
-
-    <div class="grid">
-      <div class="field"><label>業種</label><input id="fIndustry" placeholder="足場・自動車・運送など"></div>
-      <div class="field"><label>担当者</label><input id="fStaff"></div>
-    </div>
-
-    <div class="grid">
-      <div class="field"><label>ステータス</label>
-        <select id="fStatus">
-          <option>未訪問</option><option>訪問済</option><option>アポ</option>
-          <option>商談</option><option>契約</option><option>NG</option>
-        </select>
-      </div>
-      <div class="field"><label>最終訪問日</label><input id="fDate" type="date"></div>
-    </div>
-
-    <div class="field"><label>電話番号</label><input id="fPhone" inputmode="tel"></div>
-    <div class="field"><label>営業ネタ・共有情報</label>
-      <textarea id="fNeta" placeholder="例：社長は16時以降在社／防犯カメラなし／コピー機5年目"></textarea>
-    </div>
-    <div class="field"><label>次回アクション</label>
-      <textarea id="fNext" placeholder="例：9/2 15時再訪／明細確認／防犯カメラ提案"></textarea>
-    </div>
-
-    <button class="save" type="button" onclick="saveCompany()">保存</button>
-    <button id="deleteBtn" class="danger" type="button" style="display:none" onclick="deleteCompany()">この営業先を削除</button>
+  <div id="filterPanel" class="panel">
+    <button class="close" onclick="closePanel('filterPanel')">×</button><h2>詳細検索</h2>
+    <div class="field"><label>対象設備</label><select id="filterType"><option value="all">すべて</option><option value="phone_equipment">電話機</option><option value="copier_equipment">複合機</option><option value="camera_equipment">防犯カメラ</option><option value="security_equipment">警備</option><option value="utm_equipment">UTM</option><option value="server_equipment">サーバー</option></select></div>
+    <div class="grid"><div class="field"><label>メーカー</label><input id="filterManufacturer"></div><div class="field"><label>販売店</label><input id="filterVendor"></div></div>
+    <div class="grid"><div class="field"><label>有無</label><select id="filterPresence"><option value="">指定なし</option><option>有り</option><option>無し</option></select></div><div class="field"><label>契約</label><select id="filterAcquisition"><option value="">指定なし</option><option>リース</option><option>買取</option></select></div></div>
+    <div class="filter-actions"><button class="primary" onclick="applyFilters()">絞り込む</button><button class="secondary" onclick="clearFilters()">クリア</button></div>
   </div>
 
   <div id="managePanel" class="panel">
-    <button class="close" type="button" onclick="closeManage()">×</button>
-    <h2>案件を選択して削除</h2>
-    <div class="tiny">現在表示中の分類：<span id="manageCategory"></span></div>
+    <button class="close" onclick="closePanel('managePanel')">×</button><h2>案件削除</h2>
+    <div id="manageList"></div>
+    <button class="danger" onclick="deleteSelected()">選択した案件を削除</button>
+    <button class="danger" onclick="deleteAll()">全部削除（管理者）</button>
+  </div>
 
-    <div class="select-actions">
-      <button type="button" onclick="selectAllVisible(true)">全選択</button>
-      <button type="button" onclick="selectAllVisible(false)">選択解除</button>
+  <div id="accountPanel" class="panel">
+    <button class="close" onclick="closePanel('accountPanel')">×</button><h2>アカウント</h2>
+    <div id="accountMe" class="account-row"></div>
+    <button class="danger" onclick="logout()">ログアウト</button>
+    <div id="adminArea" class="hidden">
+      <h3>社員アカウント追加</h3>
+      <div class="field"><label>表示名</label><input id="newName"></div>
+      <div class="field"><label>メール</label><input id="newEmail"></div>
+      <div class="field"><label>初期パスワード</label><input id="newPass" type="password"></div>
+      <div class="field"><label>権限</label><select id="newRole"><option value="member">一般</option><option value="admin">管理者</option></select></div>
+      <button class="save" onclick="createUser()">アカウント追加</button>
+      <h3>登録ユーザー</h3><div id="profilesList"></div>
     </div>
-
-    <div id="manageList" class="manage-list"></div>
-
-    <div class="manage-actions">
-      <button class="delete-selected" type="button" onclick="deleteSelected()">選択した案件を削除</button>
-      <button class="delete-all" type="button" onclick="deleteAll()">全部削除</button>
-    </div>
-    <p class="tiny">※「全部削除」は飛び込み・見込・顧客を含む全データを削除します。</p>
   </div>
 </div>
 
 <script>
-const STORAGE_KEY='ic_sales_map_v4_multisheet';
-const CATS=['飛び込みリスト','見込','顧客'];
-let activeCategory='飛び込みリスト';
-
+const sb=supabase.createClient("https://uujvndgimcllgbllvoan.supabase.co","sb_publishable_V5MqfEfTSZsyHo_6yCQE4A_jShjBVvR");
+const EQUIP={
+ phone_equipment:{label:'電話機',manufacturers:['家電','NTT','サクサ','ナカヨ','その他'],presence:false},
+ copier_equipment:{label:'複合機',manufacturers:['シャープ','京セラ','ムラテック','キヤノン','リコー','富士フイルムBI（ゼロックス）','東芝','NTT','家電','その他'],presence:false},
+ camera_equipment:{label:'防犯カメラ',manufacturers:['NSS','その他'],presence:true},
+ security_equipment:{label:'警備',manufacturers:['ALSOK','セコム','その他'],presence:true},
+ utm_equipment:{label:'UTM',manufacturers:['NTT','サクサ','その他'],presence:true},
+ server_equipment:{label:'サーバー',manufacturers:['NEC','富士通','DELL','HP','その他'],presence:true}
+};
+let activeCategory='飛び込みリスト',companies=[],markers=[],session=null,profile=null;
+let filters={type:'all',manufacturer:'',vendor:'',presence:'',acquisition:''};
 const map=L.map('map',{zoomControl:false}).setView([34.5,135.5],6);
-L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',{
-  maxZoom:18, attribution:'地理院タイル'
-}).addTo(map);
+L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',{maxZoom:18,attribution:'地理院タイル'}).addTo(map);
 
-const seed=[
-  {category:'飛び込みリスト',name:'サンプル福岡',address:'福岡県福岡市',lat:33.5902,lng:130.4017,industry:'自動車',staff:'',status:'未訪問',date:'',phone:'',neta:'防犯カメラ未確認。',next:'飛び込み候補'}
-];
-
-let companies=loadData();
-let markers=[];
-let gpsMarker=null;
-let accuracyCircle=null;
-
-function loadData(){
-  try{
-    const v=localStorage.getItem(STORAGE_KEY);
-    return v?JSON.parse(v):seed;
-  }catch(e){return seed}
-}
-function persist(){localStorage.setItem(STORAGE_KEY,JSON.stringify(companies))}
-
-function setCategory(cat){
-  activeCategory=cat;
-  document.getElementById('tabLead').classList.toggle('active',cat==='飛び込みリスト');
-  document.getElementById('tabProspect').classList.toggle('active',cat==='見込');
-  document.getElementById('tabCustomer').classList.toggle('active',cat==='顧客');
-  render();
-}
-function colorFor(status){
-  if(status==='訪問済')return'#43d18f';
-  if(status==='アポ'||status==='商談')return'#5ba7ff';
-  if(status==='契約')return'#a97cff';
-  if(status==='NG')return'#ff6969';
-  return'#f1c340';
-}
-function iconFor(status){
-  const c=colorFor(status);
-  return L.divIcon({className:'',html:`<div style="width:15px;height:15px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}2f,0 2px 8px rgba(0,0,0,.55)"></div>`,iconSize:[15,15],iconAnchor:[7.5,7.5]});
-}
-function gpsIcon(){return L.divIcon({className:'',html:'<div class="gps-dot"></div>',iconSize:[18,18],iconAnchor:[9,9]})}
+const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
-function filtered(){
-  const q=document.getElementById('searchInput').value.trim().toLowerCase();
-  return companies.map((c,i)=>({...c,_index:i}))
-    .filter(c=>(c.category||'飛び込みリスト')===activeCategory)
-    .filter(c=>!q||[c.name,c.address,c.industry,c.staff,c.status,c.neta,c.next,c.phone].some(v=>String(v||'').toLowerCase().includes(q)));
+function openPanel(id){$ (id).style.display='block'} function closePanel(id){$ (id).style.display='none'}
+
+async function init(){
+ const {data:setup}=await sb.rpc('initial_setup_available');
+ if(setup){$('authTitle').textContent='最初の管理者登録';$('authDesc').textContent='最初の1人が管理者になります。';$('authName').classList.remove('hidden');$('authBtn').textContent='管理者登録'}
+ const {data:{session:s}}=await sb.auth.getSession(); if(s) await enter(s);
 }
-function render(){
-  markers.forEach(m=>map.removeLayer(m));markers=[];
-  const data=filtered();
-  data.forEach(c=>{
-    if(!Number.isFinite(Number(c.lat))||!Number.isFinite(Number(c.lng)))return;
-    const m=L.marker([Number(c.lat),Number(c.lng)],{icon:iconFor(c.status)}).addTo(map);
-    m.bindPopup(`
-      <div class="popup">
-        <h3>${esc(c.name)}</h3>
-        <div class="meta">${esc(c.address)}</div>
-        <div class="meta">分類：${esc(c.category||'飛び込みリスト')} / 業種：${esc(c.industry||'-')}</div>
-        <div class="meta">担当：${esc(c.staff||'-')}</div>
-        <span class="pill" style="background:${colorFor(c.status)}22;border:1px solid ${colorFor(c.status)};color:#222">${esc(c.status||'未訪問')}</span>
-        <div class="memo"><b>営業ネタ</b><br>${esc(c.neta||'なし')}</div>
-        <div class="memo"><b>次回アクション</b><br>${esc(c.next||'未設定')}</div>
-        <button onclick="editCompany(${c._index})" style="margin-top:10px;width:100%;padding:9px;border:0;border-radius:10px;background:#111827;color:#fff;font-weight:800">編集</button>
-      </div>
-    `);
-    markers.push(m);
-  });
-  document.getElementById('count').textContent=data.length.toLocaleString('ja-JP');
+async function authMain(){
+ const email=$('authEmail').value.trim(),password=$('authPass').value,name=$('authName').value.trim();
+ const {data:setup}=await sb.rpc('initial_setup_available');
+ let res=setup?await sb.auth.signUp({email,password,options:{data:{display_name:name}}}):await sb.auth.signInWithPassword({email,password});
+ if(res.error) return $('authMsg').textContent=res.error.message;
+ if(res.data.session) await enter(res.data.session); else $('authMsg').textContent='確認メールが届いた場合は確認後ログインしてください。';
 }
+async function enter(s){
+ session=s; const {data,error}=await sb.from('profiles').select('*').eq('id',s.user.id).single(); if(error)return;
+ profile=data;$('auth').classList.add('hidden');$('app').classList.remove('hidden');$('userMini').innerHTML=`${esc(profile.display_name||profile.email)}<br>${profile.role==='admin'?'管理者':'一般'}`;buildEquip();await loadCompanies();subscribe();
+}
+async function logout(){await sb.auth.signOut();location.reload()}
+async function loadCompanies(){const {data}=await sb.from('sales_accounts').select('*').order('updated_at',{ascending:false});companies=data||[];render()}
+function subscribe(){sb.channel('sales-live').on('postgres_changes',{event:'*',schema:'public',table:'sales_accounts'},loadCompanies).subscribe()}
+
+function setCategory(c){activeCategory=c;['t1','t2','t3'].forEach(x=>$(x).classList.remove('active'));$(c==='飛び込みリスト'?'t1':c==='見込'?'t2':'t3').classList.add('active');render()}
+function eqText(eq){return [eq?.presence,eq?.manufacturer,eq?.custom_manufacturer,eq?.model,eq?.vendor,eq?.acquisition,eq?.lease_start,eq?.contract_years].join(' ').toLowerCase()}
+function matchFilter(c){
+ if(!filters.manufacturer&&!filters.vendor&&!filters.presence&&!filters.acquisition)return true;
+ const keys=filters.type==='all'?Object.keys(EQUIP):[filters.type];
+ return keys.some(k=>{const e=c[k]||{};const m=(e.manufacturer==='その他'?e.custom_manufacturer:e.manufacturer)||'';return (!filters.manufacturer||m.toLowerCase().includes(filters.manufacturer.toLowerCase()))&&(!filters.vendor||String(e.vendor||'').toLowerCase().includes(filters.vendor.toLowerCase()))&&(!filters.presence||e.presence===filters.presence)&&(!filters.acquisition||e.acquisition===filters.acquisition)})
+}
+function rows(){
+ const q=$('searchInput').value.trim().toLowerCase();
+ return companies.filter(c=>c.category===activeCategory).filter(c=>{const t=[c.name,c.address,c.president_name,c.president_mobile,c.industry,c.staff,c.sales_note,c.next_action,...Object.keys(EQUIP).map(k=>eqText(c[k]))].join(' ').toLowerCase();return(!q||t.includes(q))&&matchFilter(c)})
+}
+function color(s){return s==='訪問済'?'#43d18f':(s==='アポ'||s==='商談')?'#5ba7ff':s==='契約'?'#a97cff':s==='NG'?'#ff6969':'#f1c340'}
+function render(){markers.forEach(m=>map.removeLayer(m));markers=[];const r=rows();r.forEach(c=>{if(!Number.isFinite(+c.lat)||!Number.isFinite(+c.lng))return;const co=color(c.status),ic=L.divIcon({className:'',html:`<div style="width:15px;height:15px;border-radius:50%;background:${co}"></div>`,iconSize:[15,15]}),m=L.marker([+c.lat,+c.lng],{icon:ic}).addTo(map);m.bindPopup(`<div class="popup"><h3>${esc(c.name)}</h3><div class="meta">${esc(c.address||'')}</div><div class="meta">社長:${esc(c.president_name||'-')} / ${esc(c.president_mobile||'-')}</div><div class="memo">${Object.entries(EQUIP).map(([k,v])=>{const e=c[k]||{},man=e.manufacturer==='その他'?e.custom_manufacturer:e.manufacturer;return (man||e.vendor||e.presence==='無し')?`${v.label}：${e.presence==='無し'?'無し':(man||'-')+' / '+(e.vendor||'-')}`:''}).filter(Boolean).join('<br>')}</div><button onclick="editCompany('${c.id}')" style="width:100%;margin-top:8px;padding:8px">編集</button></div>`);markers.push(m)});$('count').textContent=r.length}
 function fitAll(){if(markers.length)map.fitBounds(L.featureGroup(markers).getBounds().pad(.18))}
+function toggleSearch(){$('searchBox').style.display=$('searchBox').style.display==='block'?'none':'block'} $('searchInput').addEventListener('input',render);
+function applyFilters(){filters={type:$('filterType').value,manufacturer:$('filterManufacturer').value.trim(),vendor:$('filterVendor').value.trim(),presence:$('filterPresence').value,acquisition:$('filterAcquisition').value};render();closePanel('filterPanel');fitAll()}
+function clearFilters(){filters={type:'all',manufacturer:'',vendor:'',presence:'',acquisition:''};$('filterType').value='all';$('filterManufacturer').value='';$('filterVendor').value='';$('filterPresence').value='';$('filterAcquisition').value='';render();closePanel('filterPanel')}
 
-function requestGps(){
-  return new Promise((resolve,reject)=>{
-    if(!navigator.geolocation)return reject(new Error('GPS非対応'));
-    navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:15000,maximumAge:0});
-  });
-}
-async function locateMe(){
-  try{
-    showNotice('現在地を取得中...','GPSを高精度で確認しています',30);
-    const p=await requestGps();hideNotice();
-    const lat=p.coords.latitude,lng=p.coords.longitude,accuracy=Math.max(10,p.coords.accuracy||30);
-    if(gpsMarker)map.removeLayer(gpsMarker);
-    if(accuracyCircle)map.removeLayer(accuracyCircle);
-    gpsMarker=L.marker([lat,lng],{icon:gpsIcon(),zIndexOffset:1000}).addTo(map).bindPopup(`現在地<br>精度：約${Math.round(accuracy)}m`);
-    accuracyCircle=L.circle([lat,lng],{radius:accuracy,color:'#1677ff',weight:1,fillColor:'#1677ff',fillOpacity:.10}).addTo(map);
-    map.setView([lat,lng],16,{animate:true});gpsMarker.openPopup();
-  }catch(e){hideNotice();alert('現在地を取得できませんでした。Safariの位置情報許可を確認してください。')}
-}
-async function useCurrentLocationForForm(){
-  try{
-    const p=await requestGps();
-    document.getElementById('fLat').value=p.coords.latitude.toFixed(6);
-    document.getElementById('fLng').value=p.coords.longitude.toFixed(6);
-    alert('現在地を営業先の位置に設定しました。');
-  }catch(e){alert('現在地を取得できませんでした。')}
-}
+function buildEquip(){const root=$('equipRoot');root.innerHTML='';Object.entries(EQUIP).forEach(([k,c])=>root.insertAdjacentHTML('beforeend',`<div class="section"><b>${c.label}</b>${c.presence?`<div class="field"><label>有無</label><select id="${k}_presence"><option>有り</option><option>無し</option></select></div>`:''}<div class="grid"><div class="field"><label>メーカー</label><select id="${k}_manufacturer"><option></option>${c.manufacturers.map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field"><label>型式</label><input id="${k}_model"></div></div><div class="field"><label>その他メーカー名</label><input id="${k}_custom"></div><div class="field"><label>販売店</label><input id="${k}_vendor"></div><div class="grid"><div class="field"><label>リース/買取</label><select id="${k}_acq"><option></option><option>リース</option><option>買取</option></select></div><div class="field"><label>リース開始年月</label><input id="${k}_lease" type="month"></div></div><div class="field"><label>契約年数</label><input id="${k}_years"></div></div>`))}
+function readEq(k){return{presence:EQUIP[k].presence?$(k+'_presence').value:'',manufacturer:$(k+'_manufacturer').value,custom_manufacturer:$(k+'_custom').value.trim(),model:$(k+'_model').value.trim(),vendor:$(k+'_vendor').value.trim(),acquisition:$(k+'_acq').value,lease_start:$(k+'_lease').value,contract_years:$(k+'_years').value.trim()}}
+function fillEq(k,e={}){if(EQUIP[k].presence)$(k+'_presence').value=e.presence||'有り';$(k+'_manufacturer').value=e.manufacturer||'';$(k+'_custom').value=e.custom_manufacturer||'';$(k+'_model').value=e.model||'';$(k+'_vendor').value=e.vendor||'';$(k+'_acq').value=e.acquisition||'';$(k+'_lease').value=e.lease_start||'';$(k+'_years').value=e.contract_years||''}
+function resetForm(){['editId','fName','fIndustry','fAddress','fPresident','fPresidentMobile','fPhone','fStaff','fDate','fNeta','fNext','fLat','fLng'].forEach(i=>$(i).value='');$('fCategory').value=activeCategory;$('fStatus').value='未訪問';Object.keys(EQUIP).forEach(k=>fillEq(k,{}))}
+function openForm(){resetForm();$('deleteBtn').classList.add('hidden');openPanel('formPanel')}
+function editCompany(id){const c=companies.find(x=>String(x.id)===String(id));if(!c)return;$('editId').value=c.id;$('fCategory').value=c.category;$('fName').value=c.name||'';$('fIndustry').value=c.industry||'';$('fAddress').value=c.address||'';$('fPresident').value=c.president_name||'';$('fPresidentMobile').value=c.president_mobile||'';$('fPhone').value=c.phone||'';$('fStaff').value=c.staff||'';$('fStatus').value=c.status||'未訪問';$('fDate').value=c.last_visit_date||'';$('fNeta').value=c.sales_note||'';$('fNext').value=c.next_action||'';$('fLat').value=c.lat??'';$('fLng').value=c.lng??'';Object.keys(EQUIP).forEach(k=>fillEq(k,c[k]||{}));$('deleteBtn').classList.remove('hidden');openPanel('formPanel')} window.editCompany=editCompany;
+async function geocode(a){const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q='+encodeURIComponent(a));const d=await r.json();return d?.[0]?{lat:+d[0].lat,lng:+d[0].lon}:null}
+async function saveCompany(){const name=$('fName').value.trim(),address=$('fAddress').value.trim();if(!name)return alert('会社名を入力してください');let lat=parseFloat($('fLat').value),lng=parseFloat($('fLng').value);if((!Number.isFinite(lat)||!Number.isFinite(lng))&&address){const p=await geocode(address);if(!p)return alert('住所から位置を取得できません');lat=p.lat;lng=p.lng}const p={category:$('fCategory').value,name,address,lat,lng,industry:$('fIndustry').value.trim(),president_name:$('fPresident').value.trim(),president_mobile:$('fPresidentMobile').value.trim(),phone:$('fPhone').value.trim(),staff:$('fStaff').value.trim(),status:$('fStatus').value,last_visit_date:$('fDate').value||null,sales_note:$('fNeta').value.trim(),next_action:$('fNext').value.trim(),updated_by:session.user.id};Object.keys(EQUIP).forEach(k=>p[k]=readEq(k));const id=$('editId').value;let res;if(id)res=await sb.from('sales_accounts').update(p).eq('id',id);else{p.created_by=session.user.id;res=await sb.from('sales_accounts').insert(p)}if(res.error)return alert(res.error.message);activeCategory=p.category;setCategory(activeCategory);closePanel('formPanel')}
+async function deleteCurrent(){const id=$('editId').value;if(id&&confirm('削除しますか？'))await sb.from('sales_accounts').delete().eq('id',id);closePanel('formPanel')}
 
-function toggleSearch(){
-  const box=document.getElementById('searchBox');
-  box.style.display=box.style.display==='block'?'none':'block';
-  if(box.style.display==='block')document.getElementById('searchInput').focus();
-}
-document.getElementById('searchInput').addEventListener('input',render);
+async function locateMe(){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>alert('現在地を取得できません'),{enableHighAccuracy:true,timeout:15000,maximumAge:0})}
+function openManage(){$('manageList').innerHTML=rows().map(c=>`<label class="manage-row"><input type="checkbox" class="del" value="${c.id}"><div><b>${esc(c.name)}</b><div class="tiny">${esc(c.address||'')}</div></div></label>`).join('');openPanel('managePanel')}
+async function deleteSelected(){const ids=[...document.querySelectorAll('.del:checked')].map(x=>x.value);if(!ids.length)return alert('選択してください');if(confirm(`${ids.length}件削除しますか？`))await sb.from('sales_accounts').delete().in('id',ids)}
+async function deleteAll(){if(profile.role!=='admin')return alert('管理者のみ');if(confirm('全データ削除しますか？')&&confirm('最終確認です'))await sb.from('sales_accounts').delete().gte('id',0)}
 
-function openForm(){
-  document.getElementById('formTitle').textContent='営業先を登録';
-  document.getElementById('editIndex').value='';
-  ['fName','fAddress','fLat','fLng','fIndustry','fStaff','fDate','fPhone','fNeta','fNext'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('fStatus').value='未訪問';
-  document.getElementById('fCategory').value=activeCategory;
-  document.getElementById('deleteBtn').style.display='none';
-  document.getElementById('formPanel').style.display='block';
-}
-function closeForm(){document.getElementById('formPanel').style.display='none'}
-function editCompany(i){
-  const c=companies[i];if(!c)return;
-  document.getElementById('formTitle').textContent='営業先を編集';
-  document.getElementById('editIndex').value=i;
-  document.getElementById('fCategory').value=c.category||'飛び込みリスト';
-  document.getElementById('fName').value=c.name||'';
-  document.getElementById('fAddress').value=c.address||'';
-  document.getElementById('fLat').value=c.lat??'';
-  document.getElementById('fLng').value=c.lng??'';
-  document.getElementById('fIndustry').value=c.industry||'';
-  document.getElementById('fStaff').value=c.staff||'';
-  document.getElementById('fStatus').value=c.status||'未訪問';
-  document.getElementById('fDate').value=c.date||'';
-  document.getElementById('fPhone').value=c.phone||'';
-  document.getElementById('fNeta').value=c.neta||'';
-  document.getElementById('fNext').value=c.next||'';
-  document.getElementById('deleteBtn').style.display='block';
-  document.getElementById('formPanel').style.display='block';
-  map.closePopup();
-}
-window.editCompany=editCompany;
+async function openAccount(){$('accountMe').innerHTML=`<b>${esc(profile.display_name||'')}</b><br><span class="tiny">${esc(profile.email||'')} / ${profile.role==='admin'?'管理者':'一般'}</span>`;$('adminArea').classList.toggle('hidden',profile.role!=='admin');if(profile.role==='admin')await loadProfiles();openPanel('accountPanel')}
+async function loadProfiles(){const {data}=await sb.from('profiles').select('*').order('created_at');$('profilesList').innerHTML=(data||[]).map(p=>`<div class="account-row"><b>${esc(p.display_name||'-')}</b><br><span class="tiny">${esc(p.email||'')} / ${p.role==='admin'?'管理者':'一般'}</span></div>`).join('')}
+async function createUser(){const body={display_name:$('newName').value.trim(),email:$('newEmail').value.trim(),password:$('newPass').value,role:$('newRole').value};if(!body.email||body.password.length<8)return alert('メールと8文字以上のパスワードが必要です');const {data,error}=await sb.functions.invoke('create-ic-user',{body});if(error||data?.error)return alert(data?.error||error.message);alert('追加しました');await loadProfiles()}
 
-async function geocodeAddress(address){
-  const q=String(address||'').trim();if(!q)return null;
-  const url='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q='+encodeURIComponent(q);
-  const res=await fetch(url,{headers:{'Accept':'application/json'}});
-  if(!res.ok)throw new Error('位置検索エラー');
-  const data=await res.json();
-  if(!Array.isArray(data)||!data.length)return null;
-  return{lat:parseFloat(data[0].lat),lng:parseFloat(data[0].lon)};
-}
-function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
-function showNotice(title,text,percent){
-  document.getElementById('notice').style.display='block';
-  document.getElementById('noticeTitle').textContent=title;
-  document.getElementById('noticeText').textContent=text||'';
-  document.getElementById('progressBar').style.width=Math.max(0,Math.min(100,percent||0))+'%';
-}
-function hideNotice(){document.getElementById('notice').style.display='none'}
+function toExcel(c){const r={会社名:c.name,住所:c.address,業種:c.industry,社長名:c.president_name,社長携帯:c.president_mobile,会社電話:c.phone,担当者:c.staff,ステータス:c.status,最終訪問日:c.last_visit_date||'',営業ネタ:c.sales_note,次回アクション:c.next_action,緯度:c.lat,経度:c.lng};Object.entries(EQUIP).forEach(([k,v])=>{const e=c[k]||{},p=v.label;if(v.presence)r[p+'有無']=e.presence||'';r[p+'メーカー']=e.manufacturer==='その他'?(e.custom_manufacturer||'その他'):(e.manufacturer||'');r[p+'型式']=e.model||'';r[p+'販売店']=e.vendor||'';r[p+'契約']=e.acquisition||'';r[p+'リース開始']=e.lease_start||'';r[p+'契約年数']=e.contract_years||''});return r}
+function exportExcel(){const wb=XLSX.utils.book_new();['飛び込みリスト','見込','顧客'].forEach(cat=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(companies.filter(c=>c.category===cat).map(toExcel))||[{}]),cat);XLSX.writeFile(wb,'株式会社IC_共有営業管理.xlsx')}
+function downloadTemplate(){const wb=XLSX.utils.book_new();['飛び込みリスト','見込','顧客'].forEach(cat=>{const r={会社名:'',住所:'',業種:'',社長名:'',社長携帯:'',会社電話:'',担当者:'',ステータス:'未訪問',最終訪問日:'',営業ネタ:'',次回アクション:''};Object.values(EQUIP).forEach(v=>{if(v.presence)r[v.label+'有無']='';r[v.label+'メーカー']='';r[v.label+'型式']='';r[v.label+'販売店']='';r[v.label+'契約']='';r[v.label+'リース開始']='';r[v.label+'契約年数']=''});XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([r]),cat)});XLSX.writeFile(wb,'株式会社IC_共有営業管理_ひな形.xlsx')}
 
-async function saveCompany(){
-  const name=document.getElementById('fName').value.trim();
-  const address=document.getElementById('fAddress').value.trim();
-  let lat=parseFloat(document.getElementById('fLat').value),lng=parseFloat(document.getElementById('fLng').value);
-  if(!name)return alert('会社名を入力してください');
-  if(!address&&(!Number.isFinite(lat)||!Number.isFinite(lng)))return alert('住所を入力してください');
-
-  if((!Number.isFinite(lat)||!Number.isFinite(lng))&&address){
-    try{
-      showNotice('住所から位置を取得中...',address,35);
-      const pos=await geocodeAddress(address);
-      if(!pos){hideNotice();return alert('住所から位置を取得できませんでした。')}
-      lat=pos.lat;lng=pos.lng;
-    }catch(e){hideNotice();return alert('住所検索に失敗しました。')}
-  }
-
-  const c={
-    category:document.getElementById('fCategory').value,
-    name,address,lat,lng,
-    industry:document.getElementById('fIndustry').value.trim(),
-    staff:document.getElementById('fStaff').value.trim(),
-    status:document.getElementById('fStatus').value,
-    date:document.getElementById('fDate').value,
-    phone:document.getElementById('fPhone').value.trim(),
-    neta:document.getElementById('fNeta').value.trim(),
-    next:document.getElementById('fNext').value.trim()
-  };
-  const idx=document.getElementById('editIndex').value;
-  if(idx==='')companies.push(c);else companies[Number(idx)]=c;
-  persist();hideNotice();closeForm();
-  activeCategory=c.category;setCategory(c.category);fitAll();
-}
-function deleteCompany(){
-  const idx=Number(document.getElementById('editIndex').value);
-  if(!Number.isInteger(idx))return;
-  if(confirm('この営業先を削除しますか？')){
-    companies.splice(idx,1);persist();render();closeForm();
-  }
-}
-
-function openManage(){
-  document.getElementById('managePanel').style.display='block';
-  document.getElementById('manageCategory').textContent=activeCategory;
-  renderManageList();
-}
-function closeManage(){document.getElementById('managePanel').style.display='none'}
-function renderManageList(){
-  const box=document.getElementById('manageList');
-  const rows=companies.map((c,i)=>({...c,_index:i})).filter(c=>(c.category||'飛び込みリスト')===activeCategory);
-  if(!rows.length){box.innerHTML='<div class="tiny">この分類には案件がありません。</div>';return}
-  box.innerHTML=rows.map(c=>`
-    <label class="manage-row">
-      <input type="checkbox" class="delete-check" value="${c._index}">
-      <div><b>${esc(c.name)}</b><small>${esc(c.address||'')}</small></div>
-      <span class="badge">${esc(c.status||'未訪問')}</span>
-    </label>
-  `).join('');
-}
-function selectAllVisible(on){document.querySelectorAll('.delete-check').forEach(x=>x.checked=on)}
-function deleteSelected(){
-  const ids=[...document.querySelectorAll('.delete-check:checked')].map(x=>Number(x.value));
-  if(!ids.length)return alert('削除する案件を選択してください。');
-  if(!confirm(`${ids.length}件を削除しますか？`))return;
-  const set=new Set(ids);
-  companies=companies.filter((_,i)=>!set.has(i));
-  persist();render();renderManageList();
-  alert('選択した案件を削除しました。');
-}
-function deleteAll(){
-  if(!companies.length)return alert('削除するデータがありません。');
-  if(!confirm(`飛び込み・見込・顧客を含む全${companies.length}件を削除します。\n本当に全部削除しますか？`))return;
-  if(!confirm('最終確認です。全データを削除してよいですか？'))return;
-  companies=[];persist();render();renderManageList();
-  alert('全データを削除しました。');
-}
-
-function normalizeDate(v){
-  if(!v)return'';
-  if(typeof v==='number'){
-    const d=XLSX.SSF.parse_date_code(v);if(!d)return'';
-    return`${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
-  }
-  const s=String(v).trim().replace(/\//g,'-');
-  const m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  return m?`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`:'';
-}
-function rowToCompany(r,cat){
-  return{
-    category:cat,
-    name:r['会社名']||r['企業名']||'',
-    address:r['住所']||'',
-    lat:parseFloat(r['緯度']),
-    lng:parseFloat(r['経度']),
-    industry:r['業種']||'',
-    staff:r['担当者']||'',
-    status:r['ステータス']||'未訪問',
-    date:normalizeDate(r['最終訪問日']),
-    phone:r['電話番号']||'',
-    neta:r['営業ネタ']||r['共有情報']||'',
-    next:r['次回アクション']||''
-  }
-}
-async function geocodeMissing(list){
-  const need=list.filter(x=>x.name&&x.address&&(!Number.isFinite(x.lat)||!Number.isFinite(x.lng)));
-  let failed=0;
-  for(let i=0;i<need.length;i++){
-    const c=need[i];
-    showNotice('住所から位置を取得中...',`${i+1}/${need.length}件　${c.name}`,Math.round((i/Math.max(1,need.length))*100));
-    try{
-      const pos=await geocodeAddress(c.address);
-      if(pos){c.lat=pos.lat;c.lng=pos.lng}else failed++;
-    }catch(e){failed++}
-    if(i<need.length-1)await sleep(1100);
-  }
-  return failed;
-}
-
-document.getElementById('excelFile').addEventListener('change',async e=>{
-  const file=e.target.files[0];if(!file)return;
-  try{
-    const buf=await file.arrayBuffer();
-    const wb=XLSX.read(buf,{type:'array'});
-    let imported=[];
-
-    for(let i=0;i<Math.min(3,wb.SheetNames.length);i++){
-      const cat=CATS[i];
-      const ws=wb.Sheets[wb.SheetNames[i]];
-      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
-      imported.push(...rows.map(r=>rowToCompany(r,cat)).filter(x=>x.name&&x.address));
-    }
-
-    if(!imported.length)return alert('シート1〜3に「会社名」と「住所」を入れてください。');
-
-    const failed=await geocodeMissing(imported);
-    imported=imported.filter(x=>Number.isFinite(x.lat)&&Number.isFinite(x.lng));
-    hideNotice();
-
-    if(!imported.length)return alert('地図に反映できるデータがありませんでした。');
-
-    const replace=confirm(`${imported.length}件を読み込みました。\nOK＝現在データを置き換え\nキャンセル＝現在データへ追加`);
-    companies=replace?imported:[...companies,...imported];
-    persist();render();fitAll();
-
-    const counts=CATS.map(cat=>`${cat}:${companies.filter(c=>(c.category||'飛び込みリスト')===cat).length}件`).join(' / ');
-    alert(`Excel反映完了\n${counts}${failed?`\n住所取得失敗:${failed}件`:''}`);
-  }catch(err){
-    hideNotice();alert('Excel読み込みに失敗しました: '+err.message);
-  }finally{e.target.value=''}
-});
-
-function sheetRows(cat){
-  return companies.filter(c=>(c.category||'飛び込みリスト')===cat).map(c=>({
-    '会社名':c.name,'住所':c.address,'緯度':c.lat,'経度':c.lng,'業種':c.industry,
-    '担当者':c.staff,'ステータス':c.status,'最終訪問日':c.date,'電話番号':c.phone,
-    '営業ネタ':c.neta,'次回アクション':c.next
-  }));
-}
-function addSheet(wb,cat){
-  const rows=sheetRows(cat);
-  const ws=XLSX.utils.json_to_sheet(rows.length?rows:[{
-    '会社名':'','住所':'','緯度':'','経度':'','業種':'','担当者':'','ステータス':'',
-    '最終訪問日':'','電話番号':'','営業ネタ':'','次回アクション':''
-  }]);
-  XLSX.utils.book_append_sheet(wb,ws,cat);
-}
-function exportExcel(){
-  const wb=XLSX.utils.book_new();
-  CATS.forEach(cat=>addSheet(wb,cat));
-  XLSX.writeFile(wb,'株式会社IC_営業管理.xlsx');
-}
-function downloadTemplate(){
-  const wb=XLSX.utils.book_new();
-  const samples={
-    '飛び込みリスト':[{'会社名':'株式会社サンプルA','住所':'大阪府大阪市西区北堀江1-1-4','業種':'自動車','担当者':'','ステータス':'未訪問','最終訪問日':'','電話番号':'','営業ネタ':'防犯カメラ未確認','次回アクション':'飛び込み候補'}],
-    '見込':[{'会社名':'株式会社サンプルB','住所':'福岡県福岡市博多区博多駅前1丁目','業種':'建設','担当者':'','ステータス':'アポ','最終訪問日':'','電話番号':'','営業ネタ':'社長夕方在社','次回アクション':'再訪'}],
-    '顧客':[{'会社名':'株式会社サンプルC','住所':'熊本県熊本市中央区','業種':'運送','担当者':'','ステータス':'契約','最終訪問日':'','電話番号':'','営業ネタ':'既存顧客','次回アクション':'定期フォロー'}]
-  };
-  CATS.forEach(cat=>{
-    const ws=XLSX.utils.json_to_sheet(samples[cat]);
-    XLSX.utils.book_append_sheet(wb,ws,cat);
-  });
-  XLSX.writeFile(wb,'株式会社IC_営業管理_ひな形.xlsx');
-}
-
-render();
-if('serviceWorker'in navigator){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=4').catch(()=>{}));
-}
+init();
 </script>
-</body>
-</html>
+</body></html>
